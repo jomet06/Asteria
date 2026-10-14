@@ -1,60 +1,46 @@
 
 export const instant = false;
-import { redirect } from "next/navigation";
 
-import { createClient } from "@/lib/supabase/server";
-import { prisma } from "@/lib/prisma";
+import Link from "next/link";
+
+import { getMyAccount } from "@/features/profile/data";
 import { signOut } from "@/app/auth/actions";
 
 export default async function DashboardPage() {
-  const supabase = await createClient();
-
-  // Verify the current user with Supabase Auth.
-  const { data, error } = await supabase.auth.getUser();
-
-  if (error || !data.user) {
-    redirect("/login");
-  }
-
-  const user = data.user;
-
-  // Ensure this authenticated user has a profile.
-  const profile = await prisma.profile.upsert({
-    where: {
-      id: user.id,
-    },
-    update: {},
-    create: {
-      id: user.id,
-      displayName:
-        typeof user.user_metadata.full_name === "string"
-          ? user.user_metadata.full_name
-          : null,
-    },
-  });
+  const { user, profile } = await getMyAccount();
 
   return (
     <main className="min-h-screen bg-background px-6 py-12 text-foreground">
       <div className="mx-auto max-w-5xl">
-        <header className="flex items-center justify-between gap-4">
+        <header className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold">
               Asteria Dashboard
             </h1>
 
             <p className="mt-2 text-muted-foreground">
-              Welcome, {profile.displayName ?? user.email ?? "User"}!
+              Welcome,{" "}
+              {profile.displayName ?? user.email ?? "User"}!
             </p>
           </div>
 
-          <form action={signOut}>
-            <button
-              type="submit"
-              className="rounded-lg border px-4 py-2 font-medium hover:bg-muted"
+          <div className="flex items-center gap-3">
+            <Link
+              href="/settings"
+              className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted"
             >
-              Logout
-            </button>
-          </form>
+              Settings
+            </Link>
+
+            <form action={signOut}>
+              <button
+                type="submit"
+                className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted"
+              >
+                Logout
+              </button>
+            </form>
+          </div>
         </header>
 
         <section className="mt-10 grid gap-5 md:grid-cols-3">

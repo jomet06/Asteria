@@ -99,25 +99,6 @@ export async function signInWithGoogle() {
   redirect(data.url);
 }
 
-export async function resendConfirmation(formData: FormData) {
-  const value = formData.get("email");
-  const email = typeof value === "string" ? value.trim().toLowerCase() : "";
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    redirect("/login?error=invalid_email");
-  }
-  const supabase = await createClient();
-  const { error } = await supabase.auth.resend({
-    type: "signup",
-    email,
-    options: { emailRedirectTo: `${siteUrl}/auth/callback` },
-  });
-  if (error) {
-    logAuthFailure("resend", error);
-    redirect(`/login?error=${authErrorCode(error, "resend_failed")}`);
-  }
-  redirect("/login?status=confirmation_requested");
-}
-
 export async function signOut() {
   const supabase = await createClient();
 

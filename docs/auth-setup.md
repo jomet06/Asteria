@@ -10,7 +10,7 @@ The application uses Supabase Auth for email/password and Google sign-in. SMTP c
 4. Keep email confirmation enabled. Request one confirmation email and check both Supabase Auth logs and the SMTP provider's delivery events. A successful signup or resend response does not prove inbox delivery, and repeat signup responses can obscure existing accounts.
 5. Open the latest confirmation link in the same browser used to request it; the callback exchanges the PKCE code using that browser's verifier cookie. Check that a confirmed account can sign in with its password.
 
-Application server logs include only the operation, Auth error code and HTTP status. They deliberately omit emails, passwords, tokens and raw provider messages. The login page distinguishes unconfirmed email, incorrect credentials and request limits, and offers an explicit resend form. Supabase enforces delivery limits for resend requests.
+Application server logs include only the operation, Auth error code and HTTP status. They deliberately omit emails, passwords, tokens and raw provider messages. The login page distinguishes unconfirmed email, incorrect credentials and request limits. Confirmation email resend is not exposed by the application.
 
 ## Security advisor findings
 
