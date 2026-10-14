@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
+import { logAuthFailure } from "@/lib/supabase/auth-errors";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -18,6 +19,7 @@ export async function GET(request: Request) {
   const { error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error) {
+    logAuthFailure("callback", error);
     return NextResponse.redirect(
       new URL("/login?error=callback_failed", url.origin)
     );

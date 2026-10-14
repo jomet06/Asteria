@@ -1,10 +1,13 @@
 
+export const instant = false;
 import Link from "next/link";
 
 import {
   signIn,
   signInWithGoogle,
+  resendConfirmation,
 } from "@/app/auth/actions";
+import { authErrorMessage } from "@/lib/supabase/auth-errors";
 
 type LoginPageProps = {
   searchParams: Promise<{
@@ -29,17 +32,15 @@ export default async function LoginPage({
           Sign in to your Asteria account.
         </p>
 
-        {status === "check_email" && (
+        {(status === "check_email" || status === "confirmation_requested") && (
           <p role="status" className="mt-5 rounded-lg bg-blue-100 p-3 text-sm text-blue-800">
-            Check your email for a confirmation link before signing in.
+            If your account needs confirmation, check your inbox and spam folder for a link. An accepted request does not guarantee email delivery. Open the latest link in this browser.
           </p>
         )}
 
         {error && (
           <p role="alert" className="mt-5 rounded-lg bg-red-100 p-3 text-sm text-red-700">
-            {error === "invalid_credentials"
-              ? "Invalid credentials or account not confirmed."
-              : "Authentication failed. Please try again."}
+            {authErrorMessage(error)}
           </p>
         )}
 
@@ -81,6 +82,16 @@ export default async function LoginPage({
             Sign In
           </button>
         </form>
+
+        <details className="mt-5 text-sm">
+          <summary className="cursor-pointer text-blue-500">Need a new confirmation email?</summary>
+          <form action={resendConfirmation} className="mt-3 space-y-3">
+            <label htmlFor="confirmation-email" className="block">Email to confirm</label>
+            <input id="confirmation-email" name="email" type="email" autoComplete="email" required className="w-full rounded-lg border bg-background px-4 py-3" />
+            <p className="text-muted-foreground">Wait before requesting another link. Email delivery limits still apply.</p>
+            <button type="submit" className="w-full rounded-lg border px-4 py-3 hover:bg-muted">Request confirmation email</button>
+          </form>
+        </details>
 
         <form action={signInWithGoogle} className="mt-4">
           <button

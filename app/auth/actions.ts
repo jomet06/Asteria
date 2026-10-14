@@ -4,10 +4,11 @@
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import { authErrorCode, logAuthFailure } from "@/lib/supabase/auth-errors";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL!;
 
-function readCredentials(formData: FormData) {
+function readCredentials(formData: FormData, minimumLength = 1) {
   const email = formData.get("email");
   const password = formData.get("password");
 
@@ -21,8 +22,8 @@ function readCredentials(formData: FormData) {
   const normalizedEmail = email.trim().toLowerCase();
 
   if (
-    !normalizedEmail.includes("@") ||
-    password.length < 8
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail) ||
+    password.length < minimumLength
   ) {
     return null;
   }
@@ -34,7 +35,7 @@ function readCredentials(formData: FormData) {
 }
 
 export async function signUp(formData: FormData) {
-  const credentials = readCredentials(formData);
+  const credentials = readCredentials(formData, 8);
 
   if (!credentials) {
     redirect("/register?error=invalid_input");
@@ -42,7 +43,7 @@ export async function signUp(formData: FormData) {
 
   const supabase = await createClient();
 
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email: credentials.email,
     password: credentials.password,
     options: {
@@ -51,9 +52,11 @@ export async function signUp(formData: FormData) {
   });
 
   if (error) {
-    redirect("/register?error=signup_failed");
+    logAuthFailure("signup", error);
+    redirect(`/register?error=${authErrorCode(error, "signup_failed")}`);
   }
 
+  if (data.session) redirect("/dashboard");
   redirect("/login?status=check_email");
 }
 
@@ -72,7 +75,8 @@ export async function signIn(formData: FormData) {
   });
 
   if (error) {
-    redirect("/login?error=invalid_credentials");
+    logAuthFailure("login", error);
+    redirect(`/login?error=${authErrorCode(error, "auth_failed")}`);
   }
 
   redirect("/dashboard");
@@ -95,10 +99,33 @@ export async function signInWithGoogle() {
   redirect(data.url);
 }
 
+export async function resendConfirmation(formData: FormData) {
+  const value = formData.get("email");
+  const email = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    redirect("/login?error=invalid_email");
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email,
+    options: { emailRedirectTo: `${siteUrl}/auth/callback` },
+  });
+  if (error) {
+    logAuthFailure("resend", error);
+    redirect(`/login?error=${authErrorCode(error, "resend_failed")}`);
+  }
+  redirect("/login?status=confirmation_requested");
+}
+
 export async function signOut() {
   const supabase = await createClient();
 
-  await supabase.auth.signOut();
+  const { error } = await supabase.auth.signOut();
+
+  if (error) {
+    redirect("/dashboard?error=logout_failed");
+  }
 
   redirect("/login");
 }

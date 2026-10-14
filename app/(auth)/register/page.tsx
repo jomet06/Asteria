@@ -1,7 +1,9 @@
 
+export const instant = false;
 import Link from "next/link";
 
 import { signUp } from "@/app/auth/actions";
+import { authErrorMessage } from "@/lib/supabase/auth-errors";
 
 type RegisterPageProps = {
   searchParams: Promise<{ error?: string }>;
@@ -25,9 +27,7 @@ export default async function RegisterPage({
 
         {error && (
           <p role="alert" className="mt-5 rounded-lg bg-red-100 p-3 text-sm text-red-700">
-            {error === "invalid_input"
-              ? "Enter a valid email and a password of at least 8 characters."
-              : "Registration failed. Please try again."}
+            {authErrorMessage(error)}
           </p>
         )}
 

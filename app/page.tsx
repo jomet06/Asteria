@@ -24,28 +24,30 @@ export default function HomePage() {
             Asteria
           </Link>
 
-          <Link
-            href="/about"
-            className={buttonVariants({
-              variant: "outline",
-            })}
-          >
-            About
-          </Link>
-          
-          <Link
-            href="/login"
-            className={buttonVariants({ variant: "outline" })}
-          >
-            Login
-          </Link>
+          <nav>
+            <Link
+              href="/about"
+              className={buttonVariants({
+                variant: "outline",
+              })}
+            >
+              About
+            </Link>
 
-          <Link
-            href="/register"
-            className={buttonVariants()}
-          >
-            Get Started
-          </Link>
+            <Link
+              href="/login"
+              className={buttonVariants({ variant: "outline" })}
+            >
+              Login
+            </Link>
+
+            <Link
+              href="/register"
+              className={buttonVariants()}
+            >
+              Get Started
+            </Link>
+          </nav>
         </div>
       </header>
 
