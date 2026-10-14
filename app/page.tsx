@@ -32,6 +32,20 @@ export default function HomePage() {
           >
             About
           </Link>
+          
+          <Link
+            href="/login"
+            className={buttonVariants({ variant: "outline" })}
+          >
+            Login
+          </Link>
+
+          <Link
+            href="/register"
+            className={buttonVariants()}
+          >
+            Get Started
+          </Link>
         </div>
       </header>
 
