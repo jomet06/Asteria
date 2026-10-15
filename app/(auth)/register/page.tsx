@@ -1,12 +1,18 @@
 
-export const instant = false;
 import Link from "next/link";
+
+import { AuthShell } from "@/components/auth-shell";
+import { Button } from "@/components/ui/button";
 
 import { signUp } from "@/app/auth/actions";
 import { authErrorMessage } from "@/lib/supabase/auth-errors";
 
+export const instant = false;
+
 type RegisterPageProps = {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{
+    error?: string;
+  }>;
 };
 
 export default async function RegisterPage({
@@ -15,69 +21,81 @@ export default async function RegisterPage({
   const { error } = await searchParams;
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-6">
-      <div className="w-full max-w-md rounded-xl border bg-card p-8 shadow-sm">
-        <h1 className="text-3xl font-bold">
-          Create an Account
-        </h1>
-
-        <p className="mt-2 text-muted-foreground">
-          Start your journey with Asteria.
+    <AuthShell
+      title="Create an Account"
+      description="Start organizing your life with Asteria."
+    >
+      {error && (
+        <p
+          role="alert"
+          className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-sm"
+        >
+          {authErrorMessage(error)}
         </p>
+      )}
 
-        {error && (
-          <p role="alert" className="mt-5 rounded-lg bg-red-100 p-3 text-sm text-red-700">
-            {authErrorMessage(error)}
-          </p>
-        )}
-
-        <form action={signUp} className="mt-8 space-y-5">
-          <div>
-            <label htmlFor="email" className="text-sm font-medium">
-              Email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              className="mt-2 w-full rounded-lg border bg-background px-4 py-3"
-              placeholder="you@example.com"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="text-sm font-medium">
-              Password
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="new-password"
-              minLength={8}
-              required
-              className="mt-2 w-full rounded-lg border bg-background px-4 py-3"
-              placeholder="Minimum 8 characters"
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="w-full rounded-lg bg-blue-600 px-4 py-3 font-medium text-white hover:bg-blue-700"
+      <form action={signUp} className="space-y-5">
+        <div>
+          <label
+            htmlFor="email"
+            className="block text-sm font-medium"
           >
-            Create Account
-          </button>
-        </form>
+            Email
+          </label>
 
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          Already have an account?{" "}
-          <Link href="/login" className="text-blue-500 hover:underline">
-            Sign In
-          </Link>
-        </p>
-      </div>
-    </main>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            placeholder="you@example.com"
+            className="mt-2 w-full rounded-lg border bg-background px-4 py-3 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="password"
+            className="block text-sm font-medium"
+          >
+            Password
+          </label>
+
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            minLength={8}
+            required
+            placeholder="Minimum 8 characters"
+            className="mt-2 w-full rounded-lg border bg-background px-4 py-3 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+
+          <p className="mt-2 text-xs text-muted-foreground">
+            Use a strong, unique password.
+          </p>
+        </div>
+
+        <Button
+          type="submit"
+          size="lg"
+          className="w-full"
+        >
+          Create Account
+        </Button>
+      </form>
+
+      <p className="text-center text-sm text-muted-foreground">
+        Already have an account?{" "}
+        <Link
+          href="/login"
+          className="font-medium text-primary hover:underline"
+        >
+          Sign In
+        </Link>
+      </p>
+    </AuthShell>
   );
 }
