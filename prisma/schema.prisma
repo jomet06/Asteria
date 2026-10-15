@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -8,6 +7,10 @@ datasource db {
   provider = "postgresql"
 }
 
+// ========================================
+// USER PROFILE
+// ========================================
+
 model Profile {
   id          String   @id @db.Uuid
   displayName String?  @map("display_name")
@@ -15,5 +18,97 @@ model Profile {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  projects Project[]
+  tasks    Task[]
+
   @@map("profiles")
+}
+
+// ========================================
+// PROJECT
+// ========================================
+
+model Project {
+  id          String   @id @default(uuid()) @db.Uuid
+  ownerId     String   @map("owner_id") @db.Uuid
+  name        String   @db.VarChar(120)
+  description String?  @db.Text
+  isArchived  Boolean  @default(false) @map("is_archived")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  owner Profile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  tasks Task[]
+
+  @@index([ownerId, createdAt], map: "projects_owner_created_idx")
+  @@map("projects")
+}
+
+// ========================================
+// TASK
+// ========================================
+
+model Task {
+  id          String       @id @default(uuid()) @db.Uuid
+  ownerId     String       @map("owner_id") @db.Uuid
+  projectId   String?      @map("project_id") @db.Uuid
+  title       String       @db.VarChar(200)
+  description String?      @db.Text
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+  dueAt       DateTime?    @map("due_at") @db.Timestamptz(3)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  owner   Profile  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  subtasks Subtask[]
+
+  @@index([ownerId, status], map: "tasks_owner_status_idx")
+  @@index([ownerId, dueAt], map: "tasks_owner_due_at_idx")
+  @@index([projectId], map: "tasks_project_idx")
+  @@map("tasks")
+}
+
+// ========================================
+// SUBTASK
+// ========================================
+
+model Subtask {
+  id          String   @id @default(uuid()) @db.Uuid
+  taskId      String   @map("task_id") @db.Uuid
+  title       String   @db.VarChar(200)
+  isCompleted Boolean  @default(false) @map("is_completed")
+  position    Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, position], map: "subtasks_task_position_idx")
+  @@map("subtasks")
+}
+
+// ========================================
+// TASK STATUS
+// ========================================
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+// ========================================
+// TASK PRIORITY
+// ========================================
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
 }

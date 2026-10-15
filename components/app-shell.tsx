@@ -35,7 +35,7 @@ export function AppShell({
 
           <nav
             aria-label="Main navigation"
-            className="order-3 flex w-full items-center gap-2 sm:order-none sm:w-auto"
+            className="order-3 flex w-full items-center gap-2 sm:order-0 sm:w-auto"
           >
             <Link
               href="/dashboard"
