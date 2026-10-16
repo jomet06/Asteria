@@ -1,7 +1,9 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+
 import {
+  FolderKanban,
   LayoutDashboard,
   LogOut,
   Settings,
@@ -14,8 +16,29 @@ import { cn } from "@/lib/utils";
 
 type AppShellProps = {
   children: ReactNode;
-  activePage: "dashboard" | "settings";
+  activePage: "dashboard" | "projects" | "settings";
 };
+
+const navigation = [
+  {
+    id: "dashboard",
+    href: "/dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+  },
+  {
+    id: "projects",
+    href: "/projects",
+    label: "Projects",
+    icon: FolderKanban,
+  },
+  {
+    id: "settings",
+    href: "/settings",
+    label: "Settings",
+    icon: Settings,
+  },
+] as const;
 
 export function AppShell({
   children,
@@ -35,49 +58,41 @@ export function AppShell({
 
           <nav
             aria-label="Main navigation"
-            className="order-3 flex w-full items-center gap-2 sm:order-0 sm:w-auto"
+            className="order-3 flex w-full flex-wrap items-center gap-1 sm:order-none sm:w-auto"
           >
-            <Link
-              href="/dashboard"
-              aria-current={
-                activePage === "dashboard" ? "page" : undefined
-              }
-              className={cn(
-                buttonVariants({
-                  variant:
-                    activePage === "dashboard"
-                      ? "secondary"
-                      : "ghost",
-                }),
-                "gap-2"
-              )}
-            >
-              <LayoutDashboard className="size-4" />
-              Dashboard
-            </Link>
+            {navigation.map((item) => {
+              const Icon = item.icon;
+              const isActive = activePage === item.id;
 
-            <Link
-              href="/settings"
-              aria-current={
-                activePage === "settings" ? "page" : undefined
-              }
-              className={cn(
-                buttonVariants({
-                  variant:
-                    activePage === "settings"
-                      ? "secondary"
-                      : "ghost",
-                }),
-                "gap-2"
-              )}
-            >
-              <Settings className="size-4" />
-              Settings
-            </Link>
+              return (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  aria-current={
+                    isActive ? "page" : undefined
+                  }
+                  className={cn(
+                    buttonVariants({
+                      variant: isActive
+                        ? "secondary"
+                        : "ghost",
+                    }),
+                    "gap-2"
+                  )}
+                >
+                  <Icon className="size-4" />
+                  {item.label}
+                </Link>
+              );
+            })}
           </nav>
 
           <form action={signOut}>
-            <Button type="submit" variant="outline" size="sm">
+            <Button
+              type="submit"
+              variant="outline"
+              size="sm"
+            >
               <LogOut className="size-4" />
               Logout
             </Button>
