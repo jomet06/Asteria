@@ -5,18 +5,26 @@ import type { ReactNode } from "react";
 import {
   FolderKanban,
   LayoutDashboard,
+  ListTodo,
   LogOut,
   Settings,
   Sparkles,
 } from "lucide-react";
 
 import { signOut } from "@/app/auth/actions";
-import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  Button,
+  buttonVariants,
+} from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type AppShellProps = {
   children: ReactNode;
-  activePage: "dashboard" | "projects" | "settings";
+  activePage:
+    | "dashboard"
+    | "projects"
+    | "tasks"
+    | "settings";
 };
 
 const navigation = [
@@ -31,6 +39,12 @@ const navigation = [
     href: "/projects",
     label: "Projects",
     icon: FolderKanban,
+  },
+  {
+    id: "tasks",
+    href: "/tasks",
+    label: "Tasks",
+    icon: ListTodo,
   },
   {
     id: "settings",
@@ -62,7 +76,8 @@ export function AppShell({
           >
             {navigation.map((item) => {
               const Icon = item.icon;
-              const isActive = activePage === item.id;
+              const isActive =
+                activePage === item.id;
 
               return (
                 <Link
