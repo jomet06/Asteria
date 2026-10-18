@@ -1,14 +1,11 @@
 
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { refreshWorkspace, workspaceFeedback } from "../action-feedback";
+import { readWorkspaceView, uuidPattern } from "../workspace-view";
 
 import { getMyAccount } from "@/features/profile/data";
 import { prisma } from "@/lib/prisma";
-
-const uuidPattern =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function readProjectId(formData: FormData) {
   const id = formData.get("projectId");
@@ -54,18 +51,18 @@ export async function createProject(formData: FormData) {
   const fields = readProjectFields(formData);
 
   if (!fields) {
-    redirect("/projects?error=invalid_input");
+    return workspaceFeedback(formData, "error", "project_invalid_input");
   }
 
-  await prisma.project.create({
+  const project = await prisma.project.create({
     data: {
       ownerId: user.id,
       ...fields,
     },
   });
 
-  revalidatePath("/projects");
-  redirect("/projects?status=created");
+  refreshWorkspace();
+  return workspaceFeedback(formData, "status", "project_created", project.id);
 }
 
 // UPDATE
@@ -75,7 +72,7 @@ export async function updateProject(formData: FormData) {
   const fields = readProjectFields(formData);
 
   if (!projectId || !fields) {
-    redirect("/projects?error=invalid_input");
+    return workspaceFeedback(formData, "error", "project_invalid_input");
   }
 
   const result = await prisma.project.updateMany({
@@ -87,11 +84,11 @@ export async function updateProject(formData: FormData) {
   });
 
   if (result.count === 0) {
-    redirect("/projects?error=not_found");
+    return workspaceFeedback(formData, "error", "project_not_found");
   }
 
-  revalidatePath("/projects");
-  redirect("/projects?status=updated");
+  refreshWorkspace();
+  return workspaceFeedback(formData, "status", "project_updated");
 }
 
 // ARCHIVE / RESTORE
@@ -104,7 +101,7 @@ export async function setProjectArchived(formData: FormData) {
     !projectId ||
     (archiveValue !== "true" && archiveValue !== "false")
   ) {
-    redirect("/projects?error=invalid_input");
+    return workspaceFeedback(formData, "error", "project_invalid_input");
   }
 
   const isArchived = archiveValue === "true";
@@ -120,16 +117,12 @@ export async function setProjectArchived(formData: FormData) {
   });
 
   if (result.count === 0) {
-    redirect("/projects?error=not_found");
+    return workspaceFeedback(formData, "error", "project_not_found");
   }
 
-  revalidatePath("/projects");
+  refreshWorkspace();
 
-  redirect(
-    isArchived
-      ? "/projects?status=archived"
-      : "/projects?status=restored"
-  );
+  return workspaceFeedback(formData, "status", isArchived ? "project_archived" : "project_restored");
 }
 
 // DELETE
@@ -138,7 +131,7 @@ export async function deleteProject(formData: FormData) {
   const projectId = readProjectId(formData);
 
   if (!projectId) {
-    redirect("/projects?error=invalid_input");
+    return workspaceFeedback(formData, "error", "project_invalid_input");
   }
 
   const result = await prisma.project.deleteMany({
@@ -149,9 +142,12 @@ export async function deleteProject(formData: FormData) {
   });
 
   if (result.count === 0) {
-    redirect("/projects?error=not_found");
+    return workspaceFeedback(formData, "error", "project_not_found");
   }
 
-  revalidatePath("/projects");
-  redirect("/projects?status=deleted");
+  refreshWorkspace();
+  const view = readWorkspaceView(formData.get("view"));
+  return workspaceFeedback(
+    formData, "status", "project_deleted", view === projectId ? "inbox" : view
+  );
 }

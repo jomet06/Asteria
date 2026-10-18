@@ -32,9 +32,9 @@ const modules = [
   },
   {
     id: "tasks",
-    title: "Task & Daily Planner",
+    title: "To-Do List",
     description:
-      "Organize priorities, projects, and daily activities.",
+      "Manage tasks, projects, priorities, and deadlines.",
     icon: ListTodo,
   },
   {
@@ -113,9 +113,13 @@ export default async function DashboardPage() {
                 </CardHeader>
 
                 <CardContent>
-                  <span className="text-xs font-medium text-muted-foreground">
-                    Coming Soon
-                  </span>
+                  {module.id === "tasks" ? (
+                    <Link href="/tasks" className="inline-flex items-center gap-2 rounded-md text-sm font-medium text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+                      Open To-Do List <ArrowRight className="size-4" />
+                    </Link>
+                  ) : (
+                    <span className="text-xs font-medium text-muted-foreground">Coming Soon</span>
+                  )}
                 </CardContent>
               </Card>
             );

@@ -4,9 +4,9 @@ import type { FeatureDefinition } from "@/features/types";
 
 export const tasksFeature: FeatureDefinition = {
   id: "tasks",
-  title: "Task & Daily Planner",
+  title: "To-Do List",
   description:
-    "Organize projects, subtasks, deadlines, priorities, and AI-generated daily plans.",
+    "Manage tasks, projects, priorities, and deadlines in one workspace.",
   status: "MVP",
   icon: ListTodo,
 };

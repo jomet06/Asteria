@@ -12,13 +12,13 @@ export async function getMyProjects() {
     include: {
       _count: {
         select: {
-          tasks: true,
+          tasks: { where: { ownerId: user.id } },
         },
       },
     },
     orderBy: [
       { isArchived: "asc" },
-      { createdAt: "desc" },
+      { name: "asc" },
     ],
   });
 }

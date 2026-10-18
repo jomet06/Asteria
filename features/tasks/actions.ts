@@ -1,14 +1,11 @@
 
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { refreshWorkspace, workspaceFeedback } from "./action-feedback";
+import { uuidPattern } from "./workspace-view";
 
 import { getMyAccount } from "@/features/profile/data";
 import { prisma } from "@/lib/prisma";
-
-const uuidPattern =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const statuses = [
   "TODO",
@@ -115,7 +112,8 @@ function readTaskFields(formData: FormData) {
 
 async function ownsProject(
   userId: string,
-  projectId: string | null
+  projectId: string | null,
+  currentProjectId?: string | null
 ) {
   if (!projectId) {
     return true;
@@ -125,6 +123,8 @@ async function ownsProject(
     where: {
       id: projectId,
       ownerId: userId,
+      // An edit may keep its current archived project, but cannot move into one.
+      ...(projectId === currentProjectId ? {} : { isArchived: false }),
     },
     select: {
       id: true,
@@ -132,12 +132,6 @@ async function ownsProject(
   });
 
   return project !== null;
-}
-
-function refreshTaskPages() {
-  revalidatePath("/tasks");
-  revalidatePath("/projects");
-  revalidatePath("/dashboard");
 }
 
 // =======================================
@@ -149,11 +143,11 @@ export async function createTask(formData: FormData) {
   const fields = readTaskFields(formData);
 
   if (!fields) {
-    redirect("/tasks?error=invalid_input");
+    return workspaceFeedback(formData, "error", "invalid_input");
   }
 
   if (!(await ownsProject(user.id, fields.projectId))) {
-    redirect("/tasks?error=invalid_project");
+    return workspaceFeedback(formData, "error", "invalid_project");
   }
 
   await prisma.task.create({
@@ -163,8 +157,8 @@ export async function createTask(formData: FormData) {
     },
   });
 
-  refreshTaskPages();
-  redirect("/tasks?status=created");
+  refreshWorkspace();
+  return workspaceFeedback(formData, "status", "created");
 }
 
 // =======================================
@@ -177,11 +171,20 @@ export async function updateTask(formData: FormData) {
   const fields = readTaskFields(formData);
 
   if (!taskId || !fields) {
-    redirect("/tasks?error=invalid_input");
+    return workspaceFeedback(formData, "error", "invalid_input");
   }
 
-  if (!(await ownsProject(user.id, fields.projectId))) {
-    redirect("/tasks?error=invalid_project");
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, ownerId: user.id },
+    select: { projectId: true },
+  });
+
+  if (!task) {
+    return workspaceFeedback(formData, "error", "not_found");
+  }
+
+  if (!(await ownsProject(user.id, fields.projectId, task.projectId))) {
+    return workspaceFeedback(formData, "error", "invalid_project");
   }
 
   const result = await prisma.task.updateMany({
@@ -193,11 +196,11 @@ export async function updateTask(formData: FormData) {
   });
 
   if (result.count === 0) {
-    redirect("/tasks?error=not_found");
+    return workspaceFeedback(formData, "error", "not_found");
   }
 
-  refreshTaskPages();
-  redirect("/tasks?status=updated");
+  refreshWorkspace();
+  return workspaceFeedback(formData, "status", "updated");
 }
 
 // =======================================
@@ -215,7 +218,7 @@ export async function toggleTaskStatus(
     !taskId ||
     (nextStatus !== "DONE" && nextStatus !== "TODO")
   ) {
-    redirect("/tasks?error=invalid_input");
+    return workspaceFeedback(formData, "error", "invalid_input");
   }
 
   const result = await prisma.task.updateMany({
@@ -229,11 +232,11 @@ export async function toggleTaskStatus(
   });
 
   if (result.count === 0) {
-    redirect("/tasks?error=not_found");
+    return workspaceFeedback(formData, "error", "not_found");
   }
 
-  refreshTaskPages();
-  redirect("/tasks?status=updated");
+  refreshWorkspace();
+  return workspaceFeedback(formData, "status", "updated");
 }
 
 // =======================================
@@ -245,7 +248,7 @@ export async function deleteTask(formData: FormData) {
   const taskId = readTaskId(formData);
 
   if (!taskId) {
-    redirect("/tasks?error=invalid_input");
+    return workspaceFeedback(formData, "error", "invalid_input");
   }
 
   const result = await prisma.task.deleteMany({
@@ -256,9 +259,9 @@ export async function deleteTask(formData: FormData) {
   });
 
   if (result.count === 0) {
-    redirect("/tasks?error=not_found");
+    return workspaceFeedback(formData, "error", "not_found");
   }
 
-  refreshTaskPages();
-  redirect("/tasks?status=deleted");
+  refreshWorkspace();
+  return workspaceFeedback(formData, "status", "deleted");
 }

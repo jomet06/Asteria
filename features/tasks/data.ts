@@ -1,6 +1,7 @@
 
 import { getMyAccount } from "@/features/profile/data";
 import { prisma } from "@/lib/prisma";
+import { getMyProjects } from "./projects/data";
 
 export async function getMyTaskWorkspace() {
   const { user } = await getMyAccount();
@@ -15,19 +16,7 @@ export async function getMyTaskWorkspace() {
       ],
     }),
 
-    prisma.project.findMany({
-      where: {
-        ownerId: user.id,
-      },
-      select: {
-        id: true,
-        name: true,
-        isArchived: true,
-      },
-      orderBy: {
-        name: "asc",
-      },
-    }),
+    getMyProjects(),
   ]);
 
   return {
