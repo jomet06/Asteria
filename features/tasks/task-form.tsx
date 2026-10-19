@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "./components/workspace-dialog";
 import { fieldClass, useWorkspaceMutation } from "./components/use-workspace-mutation";
 import type { OnWorkspaceResult, WorkspaceActions, WorkspaceProject, WorkspaceTask } from "./workspace-types";
+import { SubtaskSection } from "./components/subtask-section";
 
 type TaskDetailProps = {
   task: WorkspaceTask;
@@ -99,6 +100,17 @@ export function TaskDetail({
               className={`${fieldClass} resize-y leading-relaxed`}
             />
           </div>
+
+          <SubtaskSection
+            taskId={task.id}
+            view={view}
+            subtasks={task.subtasks ?? []}
+            actions={actions}
+            onResult={onResult}
+          />
+
+          <div className="grid grid-cols-2 gap-4"></div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label htmlFor={`${prefix}-status`} className="mb-2 block text-sm font-medium">Status</label>

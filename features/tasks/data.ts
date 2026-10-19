@@ -11,6 +11,23 @@ export async function getMyTaskWorkspace() {
       where: {
         ownerId: user.id,
       },
+
+      include: {
+        subtasks: {
+          select: {
+            id: true,
+            title: true,
+            isCompleted: true,
+            position: true,
+          },
+
+          orderBy: [
+            { position: "asc" },
+            { id: "asc" },
+          ],
+        },
+      },
+
       orderBy: [
         { createdAt: "desc" },
       ],

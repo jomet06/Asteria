@@ -38,8 +38,11 @@ export function TaskWorkspace({ tasks, projects, actions, initialView = "all", i
   const title = project?.name ?? (view === "inbox" ? "Inbox" : "All Tasks");
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<WorkspaceTask | null>(null);
-  const [dirty, setDirty] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] =
+    useState<string | null>(null);
+
+  const selectedTask =
+    tasks.find((task) => task.id === selectedTaskId) ?? null;  const [dirty, setDirty] = useState(false);
   const [editingPending, setEditingPending] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
   const [message, setMessage] = useState(initialMessage);
@@ -89,7 +92,7 @@ export function TaskWorkspace({ tasks, projects, actions, initialView = "all", i
   }, [selectedTask, navigationOpen, project?.isArchived]);
 
   const listProps = { projects, view, today: localToday, actions, onResult, onOpen: (task: WorkspaceTask, trigger: HTMLButtonElement) => {
-    taskTriggerRef.current = trigger; setSelectedTask(task); setDirty(false);
+    taskTriggerRef.current = trigger; setSelectedTaskId(task.id); setDirty(false);
   }, onCompleted: () => headingRef.current?.focus() };
   const sidebar = <TodoSidebar projects={projects} tasks={tasks} view={view} onNavigate={navigate} actions={actions} onResult={onResult} />;
 
@@ -142,10 +145,10 @@ export function TaskWorkspace({ tasks, projects, actions, initialView = "all", i
         {message && <div className="pointer-events-auto flex max-w-lg items-center gap-3 rounded-xl border bg-popover px-4 py-3 text-sm text-popover-foreground shadow-lg"><Check className="size-4 shrink-0" /><span>{message.text}</span><Button variant="ghost" size="icon" aria-label="Dismiss notification" onClick={() => setMessage(undefined)}><X /></Button></div>}
       </div>
       <WorkspaceDialog open={navigationOpen} onOpenChange={setNavigationOpen} title="Your workspace" description="Choose a view or manage your projects." variant="sheet" returnFocusRef={navigationTriggerRef}>{sidebar}</WorkspaceDialog>
-      <WorkspaceDialog open={!!selectedTask} onOpenChange={(open) => { if (!open && !editingPending) { if (dirty) { discardTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; setDiscardOpen(true); } else setSelectedTask(null); } }} title="Task details" description="Make space for the details. Changes are saved when you choose Save changes." variant="sheet" returnFocusRef={taskTriggerRef}>
-        {selectedTask && <TaskDetail key={selectedTask.id} task={selectedTask} projects={projects} view={view} actions={actions} onResult={onResult} onDirtyChange={setDirty} onPendingChange={setEditingPending} onClose={() => { taskTriggerRef.current = taskTriggerRef.current?.isConnected ? taskTriggerRef.current : headingRef.current; setSelectedTask(null); setDirty(false); setEditingPending(false); }} />}
+      <WorkspaceDialog open={!!selectedTask} onOpenChange={(open) => { if (!open && !editingPending) { if (dirty) { discardTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; setDiscardOpen(true); } else setSelectedTaskId(null); } }} title="Task details" description="Make space for the details. Changes are saved when you choose Save changes." variant="sheet" returnFocusRef={taskTriggerRef}>
+        {selectedTask && <TaskDetail key={selectedTask.id} task={selectedTask} projects={projects} view={view} actions={actions} onResult={onResult} onDirtyChange={setDirty} onPendingChange={setEditingPending} onClose={() => { taskTriggerRef.current = taskTriggerRef.current?.isConnected ? taskTriggerRef.current : headingRef.current; setSelectedTaskId(null); setDirty(false); setEditingPending(false); }} />}
       </WorkspaceDialog>
-      <ConfirmDialog open={discardOpen} onOpenChange={setDiscardOpen} title="Discard unsaved changes?" description="Your edits haven’t been saved. Keep editing to finish this task." confirmLabel="Discard changes" returnFocusRef={discardTriggerRef} onConfirm={() => { setDiscardOpen(false); setSelectedTask(null); setDirty(false); }} />
+      <ConfirmDialog open={discardOpen} onOpenChange={setDiscardOpen} title="Discard unsaved changes?" description="Your edits haven’t been saved. Keep editing to finish this task." confirmLabel="Discard changes" returnFocusRef={discardTriggerRef} onConfirm={() => { setDiscardOpen(false); setSelectedTaskId(null); setDirty(false); }} />
     </div>
   );
 }

@@ -8,6 +8,11 @@ export const feedbackMessages: Record<string, string> = {
   not_found: "This task is no longer available. Refresh the page to see the latest tasks.",
   project_invalid_input: "Enter a project name of up to 120 characters and a description of up to 1,000 characters.",
   project_not_found: "This project is no longer available. Refresh the page to see the latest projects.",
+  subtask_created: "Subtask added.",
+  subtask_updated: "Subtask updated.",
+  subtask_deleted: "Subtask deleted.",
+  subtask_invalid_input: "Enter a valid subtask title.",
+  subtask_not_found: "Subtask not found or access denied.",
 };
 
 

@@ -39,14 +39,75 @@ function harness({ authenticated = true } = {}) {
     { id: taskId, ownerId: owner, projectId: archivedId, title: "Existing", description: null, status: "TODO", priority: "MEDIUM", dueAt: null },
     { id: foreignTaskId, ownerId: other, projectId: foreignId, title: "Private task" },
   ];
+  const subtasks = [
+    {
+      id: "99999999-9999-4999-8999-999999999999",
+      taskId,
+      title: "Owned step",
+      isCompleted: false,
+      position: 0,
+    },
+    {
+      id: "88888888-8888-4888-8888-888888888888",
+      taskId: foreignTaskId,
+      title: "Private step",
+      isCompleted: true,
+      position: 0,
+    },
+  ];
   const matches = (row, where) => Object.entries(where ?? {}).every(([key, value]) => row[key] === value);
   function model(name, rows) {
     return Object.fromEntries(["findMany", "findFirst", "create", "updateMany", "deleteMany"].map((method) => [method, async (args) => {
       calls.push({ name, method, args });
       const found = rows.filter((row) => matches(row, args.where));
-      if (method === "findMany") return found.map((row) => name === "project" ? {
-        ...row, _count: { tasks: tasks.filter((task) => task.projectId === row.id && matches(task, args.include?._count.select.tasks.where)).length },
-      } : { ...row });
+      
+      if (method === "findMany") {
+        return found.map((row) => {
+          // Simulate Prisma Project query.
+          if (name === "project") {
+            return {
+              ...row,
+              _count: {
+                tasks: tasks.filter(
+                  (task) =>
+                    task.projectId === row.id &&
+                    matches(
+                      task,
+                      args.include?._count.select.tasks.where
+                    )
+                ).length,
+              },
+            };
+          }
+
+          // Simulate Prisma Task include: { subtasks: ... }.
+          if (name === "task" && args.include?.subtasks) {
+            const relatedSubtasks = subtasks
+              .filter((subtask) => subtask.taskId === row.id)
+              .sort(
+                (a, b) =>
+                  a.position - b.position ||
+                  a.id.localeCompare(b.id)
+              )
+              .map(
+                ({ id, title, isCompleted, position }) => ({
+                  id,
+                  title,
+                  isCompleted,
+                  position,
+                })
+              );
+
+            return {
+              ...row,
+              subtasks: relatedSubtasks,
+            };
+          }
+
+          return { ...row };
+        });
+      }
+
       if (method === "findFirst") return found[0] ? { ...found[0] } : null;
       if (method === "create") {
         const row = { id: "ffffffff-ffff-4fff-8fff-ffffffffffff", isArchived: false, ...args.data };
@@ -364,7 +425,44 @@ test("workspace sends only task and project presentation fields to the client", 
   assert.equal(initialView, activeId);
   assert.equal(tasks.length, 1);
   assert.equal(projects.length, 2);
-  assert.deepEqual(Object.keys(tasks[0]).sort(), ["id", "title", "description", "projectId", "status", "priority", "dueAt"].sort());
+  
+  assert.deepEqual(
+    Object.keys(tasks[0]).sort(),
+    [
+      "id",
+      "title",
+      "description",
+      "projectId",
+      "status",
+      "priority",
+      "dueAt",
+      "subtasks",
+    ].sort()
+  );
+
+  assert.equal(tasks[0].subtasks.length, 1);
+
+  assert.deepEqual(
+    Object.keys(tasks[0].subtasks[0]).sort(),
+    [
+      "id",
+      "title",
+      "isCompleted",
+      "position",
+    ].sort()
+  );
+
+  assert.equal(
+    tasks[0].subtasks[0].title,
+    "Owned step"
+  );
+
+  // A foreign user's Subtask must not be exposed.
+  assert.doesNotMatch(
+    JSON.stringify({ tasks, projects }),
+    /Private step/
+  );
+
   assert.deepEqual(Object.keys(projects[0]).sort(), ["id", "name", "description", "isArchived"].sort());
   assert.equal(tasks[0].dueAt, "2026-10-17T00:00:00.000Z");
   assert.doesNotMatch(JSON.stringify({ tasks, projects }), new RegExp(`${owner}|${other}|ownerId|_count`));

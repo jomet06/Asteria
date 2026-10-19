@@ -54,7 +54,16 @@ function TaskRow({ task, project, view, today, actions, onResult, onOpen, onComp
             {due && <span className={cn("inline-flex items-center gap-1", overdue && "text-red-700 dark:text-red-300")}><CalendarDays className="size-3" /><time dateTime={due}>{dateLabel}{overdue ? " · overdue" : ""}</time></span>}
             {(task.priority === "HIGH" || task.priority === "URGENT") && <span className={cn("inline-flex items-center gap-1", task.priority === "URGENT" ? "text-red-700 dark:text-red-300" : "text-amber-700 dark:text-amber-300")}><Flag className="size-3" />{task.priority === "URGENT" ? "Urgent" : "High"}</span>}
             {view === "all" && <span className="max-w-full truncate">{project?.name ?? "Inbox"}{project?.isArchived ? " · Archived" : ""}</span>}
-            {task.description && <MessageSquare className="size-3" aria-label="Has description" />}
+            
+            {(task.subtasks?.length ?? 0) > 0 && (
+              <span className="inline-flex items-center gap-1">
+                <Check className="size-3" />
+                {task.subtasks?.filter(
+                  (subtask) => subtask.isCompleted
+                ).length ?? 0}
+                /{task.subtasks?.length} subtasks
+              </span>
+            )}
           </span>
         </button>
       </div>
