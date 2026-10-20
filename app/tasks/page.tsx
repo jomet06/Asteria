@@ -25,6 +25,10 @@ import {
   deleteSubtask,
 } from "@/features/tasks/subtasks/actions";
 
+import {
+  addTaskToDay,
+} from "@/features/tasks/daily-planner/actions";
+
 import { TaskWorkspace } from "@/features/tasks/components/task-workspace";
 import { feedbackMessages } from "@/features/tasks/workspace-messages";
 import { readWorkspaceView } from "@/features/tasks/workspace-view";
@@ -75,14 +79,18 @@ export default async function TasksPage({
           projectId: task.projectId,
           status: task.status,
           priority: task.priority,
-          dueAt: task.dueAt?.toISOString() ?? null,
 
-          subtasks: task.subtasks.map((subtask) => ({
-            id: subtask.id,
-            title: subtask.title,
-            isCompleted: subtask.isCompleted,
-            position: subtask.position,
-          })),
+          dueAt:
+            task.dueAt?.toISOString() ?? null,
+
+          subtasks: task.subtasks.map(
+            (subtask) => ({
+              id: subtask.id,
+              title: subtask.title,
+              isCompleted: subtask.isCompleted,
+              position: subtask.position,
+            })
+          ),
         }))}
         projects={projects.map((project) => ({
           id: project.id,
@@ -104,9 +112,14 @@ export default async function TasksPage({
           toggleSubtask,
           deleteSubtask,
         }}
-        initialView={readWorkspaceView(params.view)}
+        addTaskToDay={addTaskToDay}
+        initialView={readWorkspaceView(
+          params.view
+        )}
         initialMessage={initialMessage}
-        today={new Date().toISOString().slice(0, 10)}
+        today={
+          new Date().toISOString().slice(0, 10)
+        }
       />
     </AppShell>
   );
