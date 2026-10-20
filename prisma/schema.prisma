@@ -1,3 +1,4 @@
+
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -61,11 +62,13 @@ model Task {
   createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  owner   Profile  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner Profile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
-  subtasks Subtask[]
+  subtasks       Subtask[]
+  dailyPlanItems DailyPlanItem[]
 
+  @@unique([id, ownerId], map: "tasks_id_owner_unique")
   @@index([ownerId, status], map: "tasks_owner_status_idx")
   @@index([ownerId, dueAt], map: "tasks_owner_due_at_idx")
   @@index([projectId], map: "tasks_project_idx")
@@ -89,6 +92,27 @@ model Subtask {
 
   @@index([taskId, position], map: "subtasks_task_position_idx")
   @@map("subtasks")
+}
+
+// ========================================
+// DAILY PLANNER
+// ========================================
+
+model DailyPlanItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  ownerId     String   @map("owner_id") @db.Uuid
+  taskId      String   @map("task_id") @db.Uuid
+  plannedDate DateTime @map("planned_date") @db.Date
+  position    Int      @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  task Task @relation(fields: [taskId, ownerId], references: [id, ownerId], onDelete: Cascade)
+
+  @@unique([taskId, plannedDate], map: "daily_plan_task_date_unique")
+  @@index([ownerId, plannedDate, position], map: "daily_plan_owner_date_position_idx")
+  @@map("daily_plan_items")
 }
 
 // ========================================
