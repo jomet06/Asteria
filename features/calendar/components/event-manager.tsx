@@ -23,6 +23,8 @@ import {
 
 import { Button } from "@/components/ui/button";
 
+import { parseRecurrence } from "../recurrence";
+
 import type {
   CalendarActionResult,
 } from "../actions";
@@ -50,6 +52,9 @@ type Props = {
   timezone: CalendarTimezone;
   events: CalendarEventView[];
   limit: number;
+  schemaPending: boolean;
+  tasks: { id: string; title: string }[];
+  tasksTruncated: boolean;
   actions: {
     create: CalendarAction;
     update: CalendarAction;
@@ -67,11 +72,21 @@ function EventFields({
   item,
   timezone,
   month,
+  tasks,
+  occurrenceOnly,
 }: {
   item: CalendarEventView | null;
   timezone: CalendarTimezone;
   month: string;
+  tasks: { id: string; title: string }[];
+  occurrenceOnly: boolean;
 }) {
+  const initialRule = parseRecurrence(item?.recurrenceRule ?? "");
+  const [frequency, setFrequency] = useState(initialRule?.frequency ?? "none");
+  const [termination, setTermination] = useState(initialRule?.until ? "until" : initialRule?.count ? "count" : "never");
+  const [weekdays, setWeekdays] = useState(initialRule?.weekdays ?? [new Date().getUTCDay()]);
+  const [until, setUntil] = useState(initialRule?.until ?? "");
+  const [count, setCount] = useState(initialRule?.count ?? 10);
   const [isAllDay, setIsAllDay] = useState(
     item?.isAllDay ?? false
   );
@@ -115,6 +130,30 @@ function EventFields({
 
   return (
     <div className="space-y-4">
+      <label className="block text-sm font-medium">Task time block (optional)
+        <select name="taskId" className={fieldClass} defaultValue={item?.taskId ?? ""} disabled={occurrenceOnly}>
+          <option value="">No task association</option>
+          {item?.taskId && !tasks.some((task) => task.id === item.taskId) && <option value={item.taskId}>Current task</option>}
+          {tasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}
+        </select>
+      </label>
+      {occurrenceOnly && <input type="hidden" name="taskId" value={item?.taskId ?? ""} />}
+      {!occurrenceOnly && <fieldset className="space-y-3 rounded-lg border p-3">
+        <legend className="px-1 text-sm font-medium">Recurrence</legend>
+        <label className="block text-sm">Repeat
+          <select className={fieldClass} value={frequency} onChange={(event) => setFrequency(event.target.value as typeof frequency)}>
+            <option value="none">Does not repeat</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option>
+          </select>
+        </label>
+        {frequency === "weekly" && <div className="flex flex-wrap gap-3">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, index) => <label key={day} className="flex items-center gap-1 text-sm"><input type="checkbox" checked={weekdays.includes(index)} onChange={(event) => setWeekdays(event.target.checked ? [...weekdays, index] : weekdays.filter((day) => day !== index))} />{day}</label>)}</div>}
+        {frequency !== "none" && <>
+          <label className="block text-sm">Ends<select className={fieldClass} value={termination} onChange={(event) => setTermination(event.target.value)}><option value="never">Never</option><option value="until">On date</option><option value="count">After occurrences</option></select></label>
+          {termination === "until" && <label className="block text-sm">Last date<input type="date" required className={fieldClass} value={until} onChange={(event) => setUntil(event.target.value)} /></label>}
+          {termination === "count" && <label className="block text-sm">Occurrence count<input type="number" required min={1} max={10000} className={fieldClass} value={count} onChange={(event) => setCount(Number(event.target.value))} /></label>}
+          <p className="text-xs text-muted-foreground">The start date is the first occurrence. Missing monthly dates are skipped. Conflict checks cover the first year.</p>
+        </>}
+      </fieldset>}
+      <input type="hidden" name="recurrenceRule" value={!occurrenceOnly && frequency !== "none" ? JSON.stringify({ frequency, weekdays, ...(termination === "until" ? { until } : termination === "count" ? { count } : {}) }) : ""} />
       <div>
         <label
           htmlFor="calendar-event-title"
@@ -369,6 +408,9 @@ export function EventManager({
   timezone,
   events,
   limit,
+  schemaPending,
+  tasks,
+  tasksTruncated,
   actions,
 }: Props) {
   const router = useRouter();
@@ -381,6 +423,8 @@ export function EventManager({
   const [pending, startTransition] =
     useTransition();
 
+  const [scope, setScope] = useState<"series" | "occurrence">("occurrence");
+  const [conflictConfirmed, setConflictConfirmed] = useState(false);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
   const [confirmDelete, setConfirmDelete] =
@@ -395,6 +439,8 @@ export function EventManager({
     value: CalendarEventView | "create"
   ) {
     setEditor(value);
+    setScope(value !== "create" && value.recurrenceRule ? "occurrence" : "series");
+    setConflictConfirmed(false);
     setError("");
     setFeedback("");
     setConfirmDelete(false);
@@ -406,9 +452,12 @@ export function EventManager({
     const isCreate = editor === "create";
 
     if (!isCreate) {
-      data.set("eventId", editor.id);
+      data.set("eventId", editor.seriesId ?? editor.id);
+      data.set("scope", scope);
+      if (editor.originalStart) data.set("originalStart", editor.originalStart);
     }
 
+    data.set("confirmConflict", String(conflictConfirmed));
     startTransition(async () => {
       try {
         const result = isCreate
@@ -416,6 +465,11 @@ export function EventManager({
           : await actions.update(data);
 
         if (!result.ok) {
+          if (result.code === "conflict") {
+            setConflictConfirmed(true);
+            setError(result.message ?? "Schedule conflict. Save again to continue.");
+            return;
+          }
           setError(
             result.code === "not_found"
               ? "Event not found or access denied."
@@ -444,7 +498,9 @@ export function EventManager({
     if (!editing || pending) return;
 
     const data = new FormData();
-    data.set("eventId", editing.id);
+    data.set("eventId", editing.seriesId ?? editing.id);
+    data.set("scope", scope);
+    if (editing.originalStart) data.set("originalStart", editing.originalStart);
 
     startTransition(async () => {
       try {
@@ -490,7 +546,7 @@ export function EventManager({
         <Button
           type="button"
           onClick={() => openEditor("create")}
-          disabled={pending}
+          disabled={pending || schemaPending}
         >
           <Plus className="size-4" />
           New event
@@ -506,6 +562,7 @@ export function EventManager({
         </p>
       )}
 
+      {tasksTruncated && <p role="status" className="text-sm text-muted-foreground">The task selector shows the first 500 tasks.</p>}
       {/* EVENT EDITOR */}
       {editor && (
         <section
@@ -526,7 +583,7 @@ export function EventManager({
               variant="ghost"
               size="icon"
               aria-label="Close event editor"
-              disabled={pending}
+              disabled={pending || schemaPending}
               onClick={() => setEditor(null)}
             >
               <X className="size-4" />
@@ -546,13 +603,22 @@ export function EventManager({
               );
             }}
             className="space-y-5"
+            onChange={() => { setConflictConfirmed(false); setError(""); }}
           >
+            <fieldset disabled={pending || schemaPending} className="space-y-5">
+            {editing?.recurrenceRule && <label className="block text-sm font-medium">Apply changes to
+              <select className={fieldClass} value={scope} onChange={(event) => { setScope(event.target.value as typeof scope); setConflictConfirmed(false); }}><option value="occurrence">This occurrence</option><option value="series">Entire series</option></select>
+              {scope === "series" && <span className="mt-2 block text-xs text-muted-foreground">Saving the entire series resets all occurrence edits and cancellations. The original series start is used.</span>}
+            </label>}
             <EventFields
-              key={editing?.id ?? "create"}
-              item={editing}
+              key={`${editing?.id ?? "create"}:${scope}`}
+              item={editing && scope === "series" ? { ...editing, startsAt: editing.seriesStartsAt ?? editing.startsAt, endsAt: editing.seriesEndsAt ?? editing.endsAt } : editing}
               timezone={timezone}
               month={month}
+              tasks={tasks}
+              occurrenceOnly={scope === "occurrence" && !!editing?.recurrenceRule}
             />
+            </fieldset>
 
             {error && (
               <p
@@ -569,7 +635,7 @@ export function EventManager({
                   <Button
                     type="button"
                     variant="destructive"
-                    disabled={pending}
+                    disabled={pending || schemaPending}
                     onClick={() =>
                       setConfirmDelete(true)
                     }
@@ -589,7 +655,7 @@ export function EventManager({
                       <Button
                         type="button"
                         variant="destructive"
-                        disabled={pending}
+                        disabled={pending || schemaPending}
                         onClick={remove}
                       >
                         Yes, delete
@@ -598,7 +664,7 @@ export function EventManager({
                       <Button
                         type="button"
                         variant="outline"
-                        disabled={pending}
+                        disabled={pending || schemaPending}
                         onClick={() =>
                           setConfirmDelete(false)
                         }
@@ -614,7 +680,7 @@ export function EventManager({
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={pending}
+                  disabled={pending || schemaPending}
                   onClick={() => setEditor(null)}
                 >
                   Cancel
@@ -622,7 +688,7 @@ export function EventManager({
 
                 <Button
                   type="submit"
-                  disabled={pending}
+                  disabled={pending || schemaPending}
                 >
                   {pending
                     ? "Saving..."
@@ -745,8 +811,7 @@ export function EventManager({
                   variant="outline"
                   size="sm"
                   disabled={
-                    pending ||
-                    item.recurrenceRule !== null
+                    pending || schemaPending
                   }
                   onClick={() =>
                     openEditor(item)
@@ -764,8 +829,7 @@ export function EventManager({
         {events.length === limit && (
           <p className="border-t p-4 text-xs text-muted-foreground">
             Showing the first {limit} events.
-            More extensive calendar navigation
-            will arrive in M3.3.
+            Narrow the displayed date range to inspect other events.
           </p>
         )}
       </section>

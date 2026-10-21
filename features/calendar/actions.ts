@@ -1,258 +1,108 @@
-
 "use server";
 
 import { revalidatePath } from "next/cache";
-
 import { getMyAccount } from "@/features/profile/data";
 import { prisma } from "@/lib/prisma";
-
-import {
-  isCalendarTimezone,
-  parseCalendarLocal,
-  parseAllDayRange,
-} from "./date-time";
+import { readEventFields, readEventId } from "./validation";
+import { expandSeries, overlaps } from "./recurrence";
+import { loadCalendarEvents } from "./data";
+import { readCalendarTimezone } from "./date-time";
 
 export type CalendarActionResult =
-  | {
-      ok: true;
-      code: "created" | "updated" | "deleted";
-    }
-  | {
-      ok: false;
-      code: "invalid_input" | "not_found";
-    };
-
-const uuidPattern =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function readEventId(
-  formData: FormData
-): string | null {
-  const value = formData.get("eventId");
-
-  return (
-    typeof value === "string" &&
-    uuidPattern.test(value)
-  )
-    ? value
-    : null;
-}
-
-function readEventFields(
-  formData: FormData
-) {
-  const titleValue = formData.get("title");
-  const descriptionValue =
-    formData.get("description");
-  const locationValue =
-    formData.get("location");
-  const timezoneValue =
-    formData.get("timezone");
-  const allDayValue =
-    formData.get("isAllDay");
-
-  if (
-    typeof titleValue !== "string" ||
-    typeof descriptionValue !== "string" ||
-    typeof locationValue !== "string" ||
-    !isCalendarTimezone(timezoneValue) ||
-    (
-      allDayValue !== "true" &&
-      allDayValue !== "false"
-    )
-  ) {
-    return null;
-  }
-
-  const title = titleValue.trim();
-  const description =
-    descriptionValue.trim();
-  const location = locationValue.trim();
-
-  if (
-    title.length < 1 ||
-    title.length > 200 ||
-    description.length > 2000 ||
-    location.length > 255
-  ) {
-    return null;
-  }
-
-  const isAllDay = allDayValue === "true";
-
-  let startsAt: Date;
-  let endsAt: Date;
-
-  if (isAllDay) {
-    const range = parseAllDayRange(
-      formData.get("startDate"),
-      formData.get("endDate"),
-      timezoneValue
-    );
-
-    if (!range) return null;
-
-    startsAt = range.startsAt;
-    endsAt = range.endsAt;
-  } else {
-    const start = parseCalendarLocal(
-      formData.get("startLocal"),
-      timezoneValue
-    );
-
-    const end = parseCalendarLocal(
-      formData.get("endLocal"),
-      timezoneValue
-    );
-
-    if (
-      !start ||
-      !end ||
-      end.getTime() <= start.getTime() ||
-      end.getTime() - start.getTime() >
-        366 * 86_400_000
-    ) {
-      return null;
-    }
-
-    startsAt = start;
-    endsAt = end;
-  }
-
-  return {
-    title,
-    description: description || null,
-    location: location || null,
-    timezone: timezoneValue,
-    isAllDay,
-    startsAt,
-    endsAt,
-  };
-}
+  | { ok: true; code: "created" | "updated" | "deleted" }
+  | { ok: false; code: "invalid_input" | "not_found" | "conflict"; message?: string };
+const invalid: CalendarActionResult = { ok: false, code: "invalid_input" };
+const missing: CalendarActionResult = { ok: false, code: "not_found" };
 
 function refreshCalendar() {
   revalidatePath("/calendar");
   revalidatePath("/dashboard");
 }
 
-// ========================================
-// CREATE EVENT
-// ========================================
+async function conflictWarning(ownerId: string, fields: NonNullable<ReturnType<typeof readEventFields>>, data: FormData, excludeId?: string, occurrence?: Date): Promise<CalendarActionResult | null> {
+  if (data.get("confirmConflict") === "true") return null;
+  const from = fields.startsAt;
+  const to = new Date(Math.max(fields.endsAt.getTime(), from.getTime() + (fields.recurrenceRule ? 366 : 0) * 86400000));
+  const existing = await loadCalendarEvents(ownerId, from, to);
+  const proposed = expandSeries({ ...fields, timezone: readCalendarTimezone(fields.timezone) }, from, to);
+  const selfConflict = proposed.some((item, index) => index > 0 && overlaps(proposed[index - 1], item));
+  const conflict = selfConflict || proposed.some((candidate) => existing.events.some((event) => {
+    if (event.seriesId === excludeId && (!occurrence || event.originalStart === occurrence.toISOString())) return false;
+    return overlaps(candidate, { startsAt: new Date(event.startsAt), endsAt: new Date(event.endsAt) });
+  }));
+  if (conflict || existing.truncated || proposed.length > 500) return { ok: false, code: "conflict", message: conflict ? "This schedule overlaps an existing event. Save again to continue." : "Conflict checking reached its limit. Save again to continue." };
+  return null;
+}
 
-export async function createCalendarEvent(
-  formData: FormData
-): Promise<CalendarActionResult> {
+export async function createCalendarEvent(data: FormData): Promise<CalendarActionResult> {
   const { user } = await getMyAccount();
+  const fields = readEventFields(data);
+  if (!fields) return invalid;
+  if (fields.taskId && !await prisma.task.findFirst({ where: { id: fields.taskId, ownerId: user.id }, select: { id: true } })) return missing;
+  const warning = await conflictWarning(user.id, fields, data);
+  if (warning) return warning;
+  await prisma.calendarEvent.create({ data: { ...fields, ownerId: user.id } });
+  refreshCalendar();
+  return { ok: true, code: "created" };
+}
 
-  const fields = readEventFields(formData);
+function occurrenceDate(data: FormData): Date | null {
+  const raw = data.get("originalStart");
+  if (typeof raw !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(raw)) return null;
+  const date = new Date(raw);
+  return Number.isFinite(date.getTime()) && date.toISOString() === raw ? date : null;
+}
 
-  if (!fields) {
-    return {
-      ok: false,
-      code: "invalid_input",
-    };
+export async function updateCalendarEvent(data: FormData): Promise<CalendarActionResult> {
+  return mutateEvent(data, false);
+}
+export async function deleteCalendarEvent(data: FormData): Promise<CalendarActionResult> {
+  return mutateEvent(data, true);
+}
+
+async function mutateEvent(data: FormData, remove: boolean): Promise<CalendarActionResult> {
+  const { user } = await getMyAccount();
+  const id = readEventId(data);
+  const fields = remove ? null : readEventFields(data);
+  const scope = data.get("scope") ?? "series";
+  if (!id || data.has("ownerId") || (!remove && !fields) || !["series", "occurrence"].includes(String(scope))) return invalid;
+  const parent = await prisma.calendarEvent.findFirst({ where: { id, ownerId: user.id, parentId: null } });
+  if (!parent) return missing;
+  const originalStart = scope === "occurrence" ? occurrenceDate(data) : null;
+  if (scope === "occurrence") {
+    if (!originalStart || !parent.recurrenceRule) return invalid;
+    const matches = expandSeries({ ...parent, timezone: readCalendarTimezone(parent.timezone) }, originalStart, new Date(originalStart.getTime() + 1));
+    if (!matches.some((item) => item.startsAt.getTime() === originalStart.getTime())) return invalid;
+    if (fields && fields.taskId !== parent.taskId) return invalid;
   }
-
-  await prisma.calendarEvent.create({
-    data: {
-      ...fields,
-      ownerId: user.id,
-      recurrenceRule: null,
-    },
+  if (fields) {
+    if (fields.taskId && !await prisma.task.findFirst({ where: { id: fields.taskId, ownerId: user.id }, select: { id: true } })) return missing;
+    const warning = await conflictWarning(user.id, { ...fields, recurrenceRule: originalStart ? null : fields.recurrenceRule }, data, id, originalStart ?? undefined);
+    if (warning) return warning;
+  }
+  const result = await prisma.$transaction(async (tx) => {
+    // Lock the owned series to serialize series edits and occurrence exceptions.
+    const locked = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM public.calendar_events WHERE id = ${id}::uuid AND owner_id = ${user.id}::uuid FOR UPDATE`;
+    if (!locked.length) return missing;
+    const current = await tx.calendarEvent.findFirst({ where: { id, ownerId: user.id, parentId: null } });
+    if (!current) return missing;
+    if (originalStart) {
+      if (!current.recurrenceRule) return invalid;
+      const matches = expandSeries({ ...current, timezone: readCalendarTimezone(current.timezone) }, originalStart, new Date(originalStart.getTime() + 1));
+      if (!matches.some((item) => item.startsAt.getTime() === originalStart.getTime()) || (fields && fields.taskId !== current.taskId)) return invalid;
+      const existingException = await tx.calendarEvent.findFirst({ where: { parentId: id, ownerId: user.id, originalStart } });
+      if (!existingException && await tx.calendarEvent.count({ where: { parentId: id, ownerId: user.id } }) >= 500) return invalid;
+      const { title, description, location, startsAt, endsAt, timezone, isAllDay, taskId } = fields ?? current;
+      const exception = { title, description, location, startsAt, endsAt, timezone, isAllDay, taskId, recurrenceRule: null, isCancelled: remove };
+      await tx.calendarEvent.upsert({ where: { parentId_originalStart: { parentId: id, originalStart } }, create: { ...exception, parentId: id, originalStart, ownerId: user.id }, update: exception });
+    } else if (remove) {
+      await tx.calendarEvent.deleteMany({ where: { id, ownerId: user.id } });
+    } else {
+      await tx.calendarEvent.deleteMany({ where: { parentId: id, ownerId: user.id } });
+      await tx.calendarEvent.updateMany({ where: { id, ownerId: user.id }, data: fields! });
+    }
+    return { ok: true, code: remove ? "deleted" : "updated" } as CalendarActionResult;
   });
-
-  refreshCalendar();
-
-  return {
-    ok: true,
-    code: "created",
-  };
-}
-
-// ========================================
-// UPDATE EVENT
-// ========================================
-
-export async function updateCalendarEvent(
-  formData: FormData
-): Promise<CalendarActionResult> {
-  const { user } = await getMyAccount();
-
-  const eventId = readEventId(formData);
-  const fields = readEventFields(formData);
-
-  if (!eventId || !fields) {
-    return {
-      ok: false,
-      code: "invalid_input",
-    };
-  }
-
-  // M3.2 edits standalone events only.
-  // Recurring-event edits belong to M3.4.
-  const result =
-    await prisma.calendarEvent.updateMany({
-      where: {
-        id: eventId,
-        ownerId: user.id,
-        recurrenceRule: null,
-      },
-      data: fields,
-    });
-
-  if (result.count === 0) {
-    return {
-      ok: false,
-      code: "not_found",
-    };
-  }
-
-  refreshCalendar();
-
-  return {
-    ok: true,
-    code: "updated",
-  };
-}
-
-// ========================================
-// DELETE EVENT
-// ========================================
-
-export async function deleteCalendarEvent(
-  formData: FormData
-): Promise<CalendarActionResult> {
-  const { user } = await getMyAccount();
-
-  const eventId = readEventId(formData);
-
-  if (!eventId) {
-    return {
-      ok: false,
-      code: "invalid_input",
-    };
-  }
-
-  const result =
-    await prisma.calendarEvent.deleteMany({
-      where: {
-        id: eventId,
-        ownerId: user.id,
-        recurrenceRule: null,
-      },
-    });
-
-  if (result.count === 0) {
-    return {
-      ok: false,
-      code: "not_found",
-    };
-  }
-
-  refreshCalendar();
-
-  return {
-    ok: true,
-    code: "deleted",
-  };
+  if (result.ok) refreshCalendar();
+  return result;
 }

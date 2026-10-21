@@ -67,6 +67,7 @@ model Task {
 
   subtasks       Subtask[]
   dailyPlanItems DailyPlanItem[]
+  timeBlocks     CalendarEvent[]
 
   @@unique([id, ownerId], map: "tasks_id_owner_unique")
   @@index([ownerId, status], map: "tasks_owner_status_idx")
@@ -132,14 +133,25 @@ model CalendarEvent {
   timezone String  @default("Asia/Jakarta") @db.VarChar(64)
   isAllDay Boolean @default(false) @map("is_all_day")
 
-  recurrenceRule String? @map("recurrence_rule") @db.Text
+  recurrenceRule String?   @map("recurrence_rule") @db.Text
+  taskId         String?   @map("task_id") @db.Uuid
+  parentId       String?   @map("parent_id") @db.Uuid
+  originalStart  DateTime? @map("original_start") @db.Timestamptz(3)
+  isCancelled    Boolean   @default(false) @map("is_cancelled")
+
+  task       Task?           @relation(fields: [taskId, ownerId], references: [id, ownerId], onDelete: Cascade, map: "calendar_events_task_owner_fkey")
+  parent     CalendarEvent?  @relation("Occurrences", fields: [parentId, ownerId], references: [id, ownerId], onDelete: Cascade, map: "calendar_events_parent_owner_fkey")
+  exceptions CalendarEvent[] @relation("Occurrences")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   owner Profile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
+  @@unique([id, ownerId], map: "calendar_events_id_owner_unique")
+  @@unique([parentId, originalStart], map: "calendar_events_occurrence_unique")
   @@index([ownerId, startsAt], map: "calendar_events_owner_starts_idx")
+  @@index([taskId, ownerId], map: "calendar_events_task_owner_idx")
   @@index([ownerId, endsAt], map: "calendar_events_owner_ends_idx")
   @@map("calendar_events")
 }

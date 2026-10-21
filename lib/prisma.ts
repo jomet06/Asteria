@@ -1,6 +1,6 @@
 
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@/generated/prisma/client";
+import { Prisma, PrismaClient } from "@/generated/prisma/client";
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -12,16 +12,21 @@ if (!databaseUrl) {
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
+  prismaCalendarSchema?: string;
 };
 
-const adapter = new PrismaPg({
-  connectionString: databaseUrl,
-});
+// A generated client can change while Next dev keeps globalThis alive.
+// Do not reuse an instance whose Calendar model predates regeneration.
+const calendarSchema = JSON.stringify(Prisma.CalendarEventScalarFieldEnum);
+const cachedClient = globalForPrisma.prismaCalendarSchema === calendarSchema
+  ? globalForPrisma.prisma
+  : undefined;
 
 export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({ adapter });
+  cachedClient ??
+  new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl }) });
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
+  globalForPrisma.prismaCalendarSchema = calendarSchema;
 }
