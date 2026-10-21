@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import {
+  CalendarDays,
   LayoutDashboard,
   ListTodo,
   LogOut,
@@ -11,10 +12,12 @@ import {
 } from "lucide-react";
 
 import { signOut } from "@/app/auth/actions";
+
 import {
   Button,
   buttonVariants,
 } from "@/components/ui/button";
+
 import { cn } from "@/lib/utils";
 
 type AppShellProps = {
@@ -23,6 +26,7 @@ type AppShellProps = {
   activePage:
     | "dashboard"
     | "tasks"
+    | "calendar"
     | "settings";
 };
 
@@ -40,6 +44,12 @@ const navigation = [
     icon: ListTodo,
   },
   {
+    id: "calendar",
+    href: "/calendar",
+    label: "Calendar",
+    icon: CalendarDays,
+  },
+  {
     id: "settings",
     href: "/settings",
     label: "Settings",
@@ -55,7 +65,14 @@ export function AppShell({
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="border-b bg-card/50">
-        <div className={cn("mx-auto flex w-full flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6", workspace ? "max-w-[1440px]" : "max-w-6xl")}>
+        <div
+          className={cn(
+            "mx-auto flex w-full flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6",
+            workspace
+              ? "max-w-[1440px]"
+              : "max-w-6xl"
+          )}
+        >
           <Link
             href="/dashboard"
             className="flex items-center gap-2 text-xl font-bold tracking-tight"
@@ -66,7 +83,11 @@ export function AppShell({
 
           <nav
             aria-label="Main navigation"
-            className={cn("order-3 flex w-full flex-wrap items-center gap-1 sm:order-none sm:w-auto", workspace && "max-sm:justify-between")}
+            className={cn(
+              "order-3 flex w-full flex-wrap items-center gap-1 sm:order-none sm:w-auto",
+              workspace &&
+                "max-sm:justify-between"
+            )}
           >
             {navigation.map((item) => {
               const Icon = item.icon;
@@ -78,7 +99,9 @@ export function AppShell({
                   key={item.id}
                   href={item.href}
                   aria-current={
-                    isActive ? "page" : undefined
+                    isActive
+                      ? "page"
+                      : undefined
                   }
                   className={cn(
                     buttonVariants({
@@ -86,7 +109,8 @@ export function AppShell({
                         ? "secondary"
                         : "ghost",
                     }),
-                    "gap-2", workspace && "min-h-10"
+                    "gap-2",
+                    workspace && "min-h-10"
                   )}
                 >
                   <Icon className="size-4" />
@@ -109,13 +133,22 @@ export function AppShell({
         </div>
       </header>
 
-      <main className={cn("mx-auto w-full flex-1", workspace ? "max-w-[1440px]" : "max-w-6xl px-4 py-10 sm:px-6")}>
+      <main
+        className={cn(
+          "mx-auto w-full flex-1",
+          workspace
+            ? "max-w-[1440px]"
+            : "max-w-6xl px-4 py-10 sm:px-6"
+        )}
+      >
         {children}
       </main>
 
-      {!workspace && <footer className="border-t py-6 text-center text-xs text-muted-foreground">
-        Asteria — Your Personal Operating System
-      </footer>}
+      {!workspace && (
+        <footer className="border-t py-6 text-center text-xs text-muted-foreground">
+          Asteria — Your Personal Operating System
+        </footer>
+      )}
     </div>
   );
 }
