@@ -46,11 +46,20 @@ import {
   workspaceHref,
 } from "../workspace-view";
 
+import {
+  DEFAULT_TASK_FILTERS,
+  hasTaskFilters,
+  matchesTaskFilters,
+  TaskFilterBar,
+  type TaskFilters,
+} from "./task-filter-bar";
+
 import { TaskDetail } from "../task-form";
 import { QuickAddTask } from "./quick-add-task";
 import { TaskList } from "./task-list";
 import { TodoSidebar } from "./todo-sidebar";
 import { ProjectMenu } from "./project-manager";
+
 import {
   ConfirmDialog,
   WorkspaceDialog,
@@ -70,6 +79,7 @@ type Props = {
   ) => Promise<PlannerActionResult>;
 
   initialView?: string;
+
   initialMessage?: {
     kind: "status" | "error";
     text: string;
@@ -87,6 +97,10 @@ export function TaskWorkspace({
   initialMessage,
   today,
 }: Props) {
+  // ========================================
+  // WORKSPACE NAVIGATION
+  // ========================================
+
   const params = useSearchParams();
   const localToday = useLocalToday(today);
 
@@ -111,26 +125,50 @@ export function TaskWorkspace({
     ? "all"
     : requestedView;
 
-  const visible = filterWorkspaceTasks(
+  const title =
+    project?.name ??
+    (view === "inbox" ? "Inbox" : "All Tasks");
+
+  // ========================================
+  // FILTER STATE
+  // ========================================
+
+  const [filters, setFilters] =
+    useState<TaskFilters>(DEFAULT_TASK_FILTERS);
+
+  const filtersActive = hasTaskFilters(filters);
+
+  // Scope tasks to All / Inbox / Project first.
+  const scopedTasks = filterWorkspaceTasks(
     tasks,
     view
   );
 
-  const active = visible.filter(
+  // Apply search, status, priority, and due date.
+  const visibleTasks = scopedTasks.filter(
+    (task) =>
+      matchesTaskFilters(
+        task,
+        filters,
+        localToday
+      )
+  );
+
+  const active = visibleTasks.filter(
     (task) =>
       task.status !== "DONE" &&
       task.status !== "CANCELLED"
   );
 
-  const closed = visible.filter(
+  const closed = visibleTasks.filter(
     (task) =>
       task.status === "DONE" ||
       task.status === "CANCELLED"
   );
 
-  const title =
-    project?.name ??
-    (view === "inbox" ? "Inbox" : "All Tasks");
+  // ========================================
+  // WORKSPACE STATE
+  // ========================================
 
   const [navigationOpen, setNavigationOpen] =
     useState(false);
@@ -141,6 +179,8 @@ export function TaskWorkspace({
   const [selectedTaskId, setSelectedTaskId] =
     useState<string | null>(null);
 
+  // Always resolve from ALL tasks.
+  // Filtering should never close an open drawer.
   const selectedTask =
     tasks.find(
       (task) => task.id === selectedTaskId
@@ -157,19 +197,30 @@ export function TaskWorkspace({
   const [message, setMessage] =
     useState(initialMessage);
 
-  const composerRef = useRef<HTMLInputElement>(null);
-  const headingRef = useRef<HTMLHeadingElement>(null);
-  const taskTriggerRef = useRef<HTMLElement | null>(null);
+  // ========================================
+  // REFS
+  // ========================================
+
+  const composerRef =
+    useRef<HTMLInputElement>(null);
+
+  const headingRef =
+    useRef<HTMLHeadingElement>(null);
+
+  const taskTriggerRef =
+    useRef<HTMLElement | null>(null);
+
   const navigationTriggerRef =
     useRef<HTMLElement | null>(null);
+
   const discardTriggerRef =
     useRef<HTMLElement | null>(null);
 
   const completedId = useId();
 
-  // ====================================
-  // FEEDBACK
-  // ====================================
+  // ========================================
+  // NOTIFICATIONS
+  // ========================================
 
   useEffect(() => {
     if (message?.kind !== "status") return;
@@ -181,28 +232,6 @@ export function TaskWorkspace({
 
     return () => window.clearTimeout(timeout);
   }, [message]);
-
-  // ====================================
-  // WORKSPACE NAVIGATION
-  // ====================================
-
-  function navigate(next: string) {
-    window.history.pushState(
-      null,
-      "",
-      workspaceHref(next)
-    );
-
-    navigationTriggerRef.current =
-      headingRef.current;
-
-    setNavigationOpen(false);
-    setMessage(undefined);
-
-    requestAnimationFrame(() =>
-      headingRef.current?.focus()
-    );
-  }
 
   const onResult = useCallback(
     (result: WorkspaceActionResult) => {
@@ -232,6 +261,28 @@ export function TaskWorkspace({
     []
   );
 
+  // ========================================
+  // ACTION HELPERS
+  // ========================================
+
+  function navigate(next: string) {
+    window.history.pushState(
+      null,
+      "",
+      workspaceHref(next)
+    );
+
+    navigationTriggerRef.current =
+      headingRef.current;
+
+    setNavigationOpen(false);
+    setMessage(undefined);
+
+    requestAnimationFrame(() =>
+      headingRef.current?.focus()
+    );
+  }
+
   function focusComposer() {
     composerRef.current?.scrollIntoView({
       block: "center",
@@ -240,9 +291,13 @@ export function TaskWorkspace({
     composerRef.current?.focus();
   }
 
-  // ====================================
-  // QUICK ADD SHORTCUT
-  // ====================================
+  function clearFilters() {
+    setFilters(DEFAULT_TASK_FILTERS);
+  }
+
+  // ========================================
+  // KEYBOARD SHORTCUT
+  // ========================================
 
   useEffect(() => {
     function shortcut(event: KeyboardEvent) {
@@ -288,9 +343,9 @@ export function TaskWorkspace({
     project?.isArchived,
   ]);
 
-  // ====================================
-  // SHARED LIST PROPS
-  // ====================================
+  // ========================================
+  // SHARED TASK LIST PROPS
+  // ========================================
 
   const listProps = {
     projects,
@@ -304,7 +359,6 @@ export function TaskWorkspace({
       trigger: HTMLButtonElement
     ) => {
       taskTriggerRef.current = trigger;
-
       setSelectedTaskId(task.id);
       setDirty(false);
     },
@@ -313,6 +367,8 @@ export function TaskWorkspace({
       headingRef.current?.focus(),
   };
 
+  // The sidebar uses ALL tasks.
+  // Project counts must not change when filtering.
   const sidebar = (
     <TodoSidebar
       projects={projects}
@@ -324,14 +380,35 @@ export function TaskWorkspace({
     />
   );
 
+  // ========================================
+  // EMPTY STATE
+  // ========================================
+
+  const noMatches =
+    filtersActive && visibleTasks.length === 0;
+
+  const showDefaultEmpty =
+    !filtersActive && active.length === 0;
+
+  // When filters are active, automatically
+  // expose matching completed tasks.
+  const completedExpanded =
+    filtersActive || showCompleted;
+
   return (
     <div className="min-w-0 lg:grid lg:grid-cols-[240px_minmax(0,1fr)]">
-      {/* DESKTOP SIDEBAR */}
+      {/* ====================================
+          DESKTOP SIDEBAR
+      ==================================== */}
+
       <div className="hidden min-h-[calc(100dvh-77px)] border-r border-border/60 bg-muted/20 px-4 py-7 lg:block">
         {sidebar}
       </div>
 
-      {/* MAIN WORKSPACE */}
+      {/* ====================================
+          MAIN WORKSPACE
+      ==================================== */}
+
       <section
         aria-labelledby="workspace-title"
         className="mx-auto w-full min-w-0 max-w-4xl px-4 pt-3 pb-28 sm:px-8 sm:pt-10 lg:px-12 lg:pb-16"
@@ -353,7 +430,8 @@ export function TaskWorkspace({
           </div>
         </div>
 
-        {/* HEADING */}
+        {/* PAGE HEADING */}
+
         <header className="mb-5 sm:mb-7">
           <div className="flex items-start justify-between gap-3">
             <h1
@@ -376,13 +454,17 @@ export function TaskWorkspace({
           </div>
 
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            {active.length > 0
-              ? `${active.length} task${
-                  active.length === 1 ? "" : "s"
-                } to do`
-              : "A little space to focus."}
+            {filtersActive
+              ? `${visibleTasks.length} matching task${
+                  visibleTasks.length === 1 ? "" : "s"
+                }`
+              : active.length > 0
+                ? `${active.length} task${
+                    active.length === 1 ? "" : "s"
+                  } to do`
+                : "A little space to focus."}
 
-            {closed.length > 0 && (
+            {!filtersActive && closed.length > 0 && (
               <span>
                 {" "}· {closed.length} completed or cancelled
               </span>
@@ -395,7 +477,8 @@ export function TaskWorkspace({
             </p>
           )}
 
-          {/* NEW: DAILY PLANNER LINK */}
+          {/* DAILY PLANNER */}
+
           <div className="mt-4">
             <Link
               href="/tasks/planner"
@@ -408,6 +491,7 @@ export function TaskWorkspace({
         </header>
 
         {/* WORKSPACE WARNINGS */}
+
         {unavailable && (
           <p
             role="alert"
@@ -433,6 +517,7 @@ export function TaskWorkspace({
         )}
 
         {/* QUICK ADD */}
+
         <div
           hidden={project?.isArchived}
           className="mb-7"
@@ -446,8 +531,23 @@ export function TaskWorkspace({
           />
         </div>
 
-        {/* ACTIVE TASKS */}
-        {active.length ? (
+        {/* ====================================
+            NEW: TASK FILTER BAR
+        ==================================== */}
+
+        <TaskFilterBar
+          value={filters}
+          onChange={setFilters}
+          onClear={clearFilters}
+          matchingCount={visibleTasks.length}
+          totalCount={scopedTasks.length}
+        />
+
+        {/* ====================================
+            ACTIVE TASK LIST
+        ==================================== */}
+
+        {active.length > 0 && (
           <>
             <div className="mb-2 flex items-center justify-between px-1 text-xs font-medium text-muted-foreground">
               <h2>To do</h2>
@@ -459,7 +559,39 @@ export function TaskWorkspace({
               {...listProps}
             />
           </>
-        ) : (
+        )}
+
+        {/* ====================================
+            NO MATCHING RESULTS
+        ==================================== */}
+
+        {noMatches && (
+          <div className="rounded-xl border border-dashed px-4 py-12 text-center sm:py-16">
+            <h2 className="text-lg font-medium">
+              No matching tasks
+            </h2>
+
+            <p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-muted-foreground">
+              Try changing your search or filters.
+              Your tasks have not been deleted.
+            </p>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-5 min-h-11"
+              onClick={clearFilters}
+            >
+              Clear filters
+            </Button>
+          </div>
+        )}
+
+        {/* ====================================
+            DEFAULT EMPTY STATE
+        ==================================== */}
+
+        {showDefaultEmpty && (
           <div className="px-4 py-12 text-center sm:py-16">
             <div className="mx-auto mb-5 flex size-12 items-center justify-center rounded-2xl bg-muted/70 text-muted-foreground">
               {closed.length ? (
@@ -491,6 +623,7 @@ export function TaskWorkspace({
 
             {!project?.isArchived && (
               <Button
+                type="button"
                 variant="ghost"
                 className="mt-4 min-h-11"
                 onClick={focusComposer}
@@ -502,33 +635,44 @@ export function TaskWorkspace({
           </div>
         )}
 
-        {/* COMPLETED TASKS */}
+        {/* ====================================
+            COMPLETED / CANCELLED
+        ==================================== */}
+
         {closed.length > 0 && (
           <div className="mt-8">
-            <button
-              type="button"
-              aria-expanded={showCompleted}
-              aria-controls={completedId}
-              onClick={() =>
-                setShowCompleted(!showCompleted)
-              }
-              className="flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm text-muted-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <ChevronDown
-                className={`size-4 transition-transform ${
-                  showCompleted ? "" : "-rotate-90"
-                }`}
-              />
+            {filtersActive ? (
+              <div className="mb-2 flex items-center justify-between px-2 text-xs font-medium text-muted-foreground">
+                <h2>Completed & cancelled</h2>
+                <span>{closed.length}</span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                aria-expanded={completedExpanded}
+                aria-controls={completedId}
+                onClick={() =>
+                  setShowCompleted(!showCompleted)
+                }
+                className="flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm text-muted-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ChevronDown
+                  className={`size-4 transition-transform ${
+                    completedExpanded ? "" : "-rotate-90"
+                  }`}
+                />
 
-              Completed & cancelled
-              <span className="ml-1 text-xs">
-                {closed.length}
-              </span>
-            </button>
+                Completed & cancelled
+
+                <span className="ml-1 text-xs">
+                  {closed.length}
+                </span>
+              </button>
+            )}
 
             <div
               id={completedId}
-              hidden={!showCompleted}
+              hidden={!completedExpanded}
             >
               <TaskList
                 tasks={closed}
@@ -540,9 +684,13 @@ export function TaskWorkspace({
         )}
       </section>
 
-      {/* MOBILE BOTTOM BAR */}
+      {/* ====================================
+          MOBILE BOTTOM BAR
+      ==================================== */}
+
       <div className="fixed inset-x-0 bottom-0 z-20 flex items-center gap-3 border-t bg-background/95 px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] backdrop-blur-sm lg:hidden">
         <Button
+          type="button"
           variant="outline"
           className="h-11 flex-1"
           onClick={(event) => {
@@ -557,6 +705,7 @@ export function TaskWorkspace({
         </Button>
 
         <Button
+          type="button"
           className="h-11 flex-[2]"
           disabled={project?.isArchived}
           onClick={focusComposer}
@@ -566,7 +715,10 @@ export function TaskWorkspace({
         </Button>
       </div>
 
-      {/* FEEDBACK */}
+      {/* ====================================
+          FEEDBACK TOAST
+      ==================================== */}
+
       <div
         className="pointer-events-none fixed right-4 bottom-24 left-4 z-40 flex justify-center lg:bottom-6 lg:left-auto"
         role={
@@ -588,6 +740,7 @@ export function TaskWorkspace({
             <span>{message.text}</span>
 
             <Button
+              type="button"
               variant="ghost"
               size="icon"
               aria-label="Dismiss notification"
@@ -599,7 +752,10 @@ export function TaskWorkspace({
         )}
       </div>
 
-      {/* MOBILE NAVIGATION DRAWER */}
+      {/* ====================================
+          WORKSPACE SIDEBAR DRAWER
+      ==================================== */}
+
       <WorkspaceDialog
         open={navigationOpen}
         onOpenChange={setNavigationOpen}
@@ -611,7 +767,10 @@ export function TaskWorkspace({
         {sidebar}
       </WorkspaceDialog>
 
-      {/* TASK DETAIL DRAWER */}
+      {/* ====================================
+          TASK DETAIL DRAWER
+      ==================================== */}
+
       <WorkspaceDialog
         open={!!selectedTask}
         onOpenChange={(open) => {
@@ -659,7 +818,10 @@ export function TaskWorkspace({
         )}
       </WorkspaceDialog>
 
-      {/* UNSAVED CHANGES CONFIRMATION */}
+      {/* ====================================
+          DISCARD CHANGES DIALOG
+      ==================================== */}
+
       <ConfirmDialog
         open={discardOpen}
         onOpenChange={setDiscardOpen}
