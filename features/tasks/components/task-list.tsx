@@ -1,6 +1,8 @@
 
 "use client";
 
+import { useSearchParams } from "next/navigation";
+
 import {
   Check,
   CircleDashed,
@@ -18,6 +20,11 @@ import type {
   WorkspaceTask,
 } from "../workspace-types";
 
+import {
+  readTaskSort,
+  sortWorkspaceTasks,
+} from "../task-sorting";
+
 import { useWorkspaceMutation } from "./use-workspace-mutation";
 
 type TaskListProps = {
@@ -27,10 +34,12 @@ type TaskListProps = {
   today: string;
   actions: WorkspaceActions;
   onResult: OnWorkspaceResult;
+
   onOpen: (
     task: WorkspaceTask,
     trigger: HTMLButtonElement
   ) => void;
+
   onCompleted: () => void;
   label?: string;
 };
@@ -109,7 +118,7 @@ function TaskRow({
         className="flex min-w-0 items-start gap-1 rounded-lg py-1 transition-colors hover:bg-muted/45 sm:gap-2"
         aria-busy={pending}
       >
-        {/* COMPLETE TASK BUTTON */}
+        {/* COMPLETE / REOPEN */}
         <button
           type="button"
           disabled={pending}
@@ -133,14 +142,20 @@ function TaskRow({
             )}
           >
             {pending ? (
-              <Loader2 className="size-3 animate-spin" />
+              <Loader2
+                className="size-3 animate-spin"
+                aria-hidden="true"
+              />
             ) : closed ? (
-              <Check className="size-3" />
+              <Check
+                className="size-3"
+                aria-hidden="true"
+              />
             ) : null}
           </span>
         </button>
 
-        {/* TASK DETAILS BUTTON */}
+        {/* OPEN TASK DETAIL */}
         <button
           type="button"
           onClick={(event) =>
@@ -180,7 +195,10 @@ function TaskRow({
                     "text-red-700 dark:text-red-300"
                 )}
               >
-                <CalendarDays className="size-3" />
+                <CalendarDays
+                  className="size-3"
+                  aria-hidden="true"
+                />
 
                 <time dateTime={due}>
                   {dateLabel}
@@ -199,7 +217,10 @@ function TaskRow({
                     : "text-amber-700 dark:text-amber-300"
                 )}
               >
-                <Flag className="size-3" />
+                <Flag
+                  className="size-3"
+                  aria-hidden="true"
+                />
 
                 {task.priority === "URGENT"
                   ? "Urgent"
@@ -210,6 +231,7 @@ function TaskRow({
             {view === "all" && (
               <span className="max-w-full truncate">
                 {project?.name ?? "Inbox"}
+
                 {project?.isArchived
                   ? " · Archived"
                   : ""}
@@ -218,15 +240,20 @@ function TaskRow({
 
             {totalSubtasks > 0 && (
               <span className="inline-flex items-center gap-1">
-                <Check className="size-3" />
-                {completedSubtasks}/{totalSubtasks} subtasks
+                <Check
+                  className="size-3"
+                  aria-hidden="true"
+                />
+
+                {completedSubtasks}/{totalSubtasks}
+                {" "}subtasks
               </span>
             )}
           </span>
         </button>
       </div>
 
-      {/* MUTATION ERROR */}
+      {/* ACTION ERROR */}
       {error && (
         <p
           role="alert"
@@ -239,18 +266,35 @@ function TaskRow({
   );
 }
 
+// ========================================
+// TASK LIST WITH SORTING
+// ========================================
+
 export function TaskList({
   tasks,
   projects,
   label = "Tasks",
   ...props
 }: TaskListProps) {
+  const searchParams = useSearchParams();
+
+  // Read the selected sorting option from URL.
+  const sort = readTaskSort(
+    searchParams?.get("sort")
+  );
+
+  // Sort a copy of the Task array.
+  const sortedTasks = sortWorkspaceTasks(
+    tasks,
+    sort
+  );
+
   return (
     <ul
       aria-label={label}
       className="min-w-0"
     >
-      {tasks.map((task) => (
+      {sortedTasks.map((task) => (
         <TaskRow
           key={task.id}
           task={task}
