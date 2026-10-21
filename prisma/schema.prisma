@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -19,8 +18,9 @@ model Profile {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  projects Project[]
-  tasks    Task[]
+  projects       Project[]
+  tasks          Task[]
+  calendarEvents CalendarEvent[]
 
   @@map("profiles")
 }
@@ -62,7 +62,7 @@ model Task {
   createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  owner Profile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner   Profile  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   subtasks       Subtask[]
@@ -113,6 +113,35 @@ model DailyPlanItem {
   @@unique([taskId, plannedDate], map: "daily_plan_task_date_unique")
   @@index([ownerId, plannedDate, position], map: "daily_plan_owner_date_position_idx")
   @@map("daily_plan_items")
+}
+
+// ========================================
+// CALENDAR EVENT — M3.1
+// ========================================
+
+model CalendarEvent {
+  id          String  @id @default(uuid()) @db.Uuid
+  ownerId     String  @map("owner_id") @db.Uuid
+  title       String  @db.VarChar(200)
+  description String? @db.Text
+  location    String? @db.VarChar(255)
+
+  startsAt DateTime @map("starts_at") @db.Timestamptz(3)
+  endsAt   DateTime @map("ends_at") @db.Timestamptz(3)
+
+  timezone String  @default("Asia/Jakarta") @db.VarChar(64)
+  isAllDay Boolean @default(false) @map("is_all_day")
+
+  recurrenceRule String? @map("recurrence_rule") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  owner Profile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, startsAt], map: "calendar_events_owner_starts_idx")
+  @@index([ownerId, endsAt], map: "calendar_events_owner_ends_idx")
+  @@map("calendar_events")
 }
 
 // ========================================
