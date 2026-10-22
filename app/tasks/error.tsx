@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -23,7 +22,7 @@ export default function TasksError({
         </div>
 
         <h1 className="mt-5 text-2xl font-semibold tracking-tight">
-          Your tasks couldn't load
+          Your tasks couldn&apos;t load
         </h1>
 
         <p className="mt-3 text-sm leading-6 text-muted-foreground">

@@ -18,9 +18,10 @@ model Profile {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  projects       Project[]
-  tasks          Task[]
-  calendarEvents CalendarEvent[]
+  projects                 Project[]
+  tasks                    Task[]
+  calendarEvents           CalendarEvent[]
+  googleCalendarConnection GoogleCalendarConnection?
 
   @@map("profiles")
 }
@@ -117,7 +118,7 @@ model DailyPlanItem {
 }
 
 // ========================================
-// CALENDAR EVENT — M3.1
+// CALENDAR EVENT — M3
 // ========================================
 
 model CalendarEvent {
@@ -154,6 +155,24 @@ model CalendarEvent {
   @@index([taskId, ownerId], map: "calendar_events_task_owner_idx")
   @@index([ownerId, endsAt], map: "calendar_events_owner_ends_idx")
   @@map("calendar_events")
+}
+
+// ========================================
+// GOOGLE CALENDAR CONNECTION — M3.7.1
+// ========================================
+
+model GoogleCalendarConnection {
+  ownerId               String   @id @map("owner_id") @db.Uuid
+  googleAccountId       String   @map("google_account_id") @db.VarChar(255)
+  googleEmail           String?  @map("google_email") @db.VarChar(320)
+  refreshTokenEncrypted String   @map("refresh_token_encrypted") @db.Text
+  grantedScopes         String   @map("granted_scopes") @db.Text
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  owner Profile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@map("google_calendar_connections")
 }
 
 // ========================================
