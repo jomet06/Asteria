@@ -1,0 +1,106 @@
+/*
+ * Asteria Celestial Design System v1
+ * Imported after globals.css. Existing shadcn and Tailwind v4 semantic
+ * utilities automatically inherit these colors, including buttons/cards.
+ */
+:root {
+  color-scheme: light;
+
+  /* Brand palette */
+  --asteria-violet: #6757e8;
+  --asteria-indigo: #171a38;
+  --asteria-lavender: #b6a8ff;
+  --asteria-teal: #26b7af;
+  --asteria-gold: #f3c66d;
+  --asteria-primary-hover: #5240d5;
+  --asteria-primary-soft: #efecff;
+
+  /* Semantic colors: light */
+  --background: #f8f9fd;
+  --foreground: #1b2140;
+  --card: #ffffff;
+  --card-foreground: #1b2140;
+  --popover: #ffffff;
+  --popover-foreground: #1b2140;
+  --primary: #6757e8;
+  --primary-foreground: #ffffff;
+  --secondary: #efecff;
+  --secondary-foreground: #352686;
+  --muted: #eef0f7;
+  --muted-foreground: #66708a;
+  --accent: #efecff;
+  --accent-foreground: #352686;
+  --destructive: #c23b51;
+  --border: #e7eaf3;
+  --input: #e7eaf3;
+  --ring: #6757e8;
+  --radius: 0.75rem;
+
+  --chart-1: #6757e8;
+  --chart-2: #26b7af;
+  --chart-3: #b6a8ff;
+  --chart-4: #f3c66d;
+  --chart-5: #4461a7;
+
+  /* Deep-indigo sidebar in both themes */
+  --sidebar: #171a38;
+  --sidebar-foreground: #f4f6ff;
+  --sidebar-primary: #b6a8ff;
+  --sidebar-primary-foreground: #171a38;
+  --sidebar-accent: #292d53;
+  --sidebar-accent-foreground: #f4f6ff;
+  --sidebar-border: #323956;
+  --sidebar-ring: #b6a8ff;
+}
+
+.dark {
+  color-scheme: dark;
+  --asteria-primary-hover: #bdb3ff;
+  --asteria-primary-soft: #29254f;
+
+  --background: #0e1329;
+  --foreground: #f4f6ff;
+  --card: #191f3b;
+  --card-foreground: #f4f6ff;
+  --popover: #191f3b;
+  --popover-foreground: #f4f6ff;
+  --primary: #a79aff;
+  --primary-foreground: #171a38;
+  --secondary: #29254f;
+  --secondary-foreground: #e1dcff;
+  --muted: #252b47;
+  --muted-foreground: #aab3cc;
+  --accent: #29254f;
+  --accent-foreground: #e7e3ff;
+  --destructive: #ff8492;
+  --border: #323956;
+  --input: #3a4261;
+  --ring: #a79aff;
+
+  --chart-1: #a79aff;
+  --chart-2: #53d1c6;
+  --chart-3: #f3c66d;
+  --chart-4: #b6a8ff;
+  --chart-5: #8296ff;
+
+  --sidebar: #171a38;
+  --sidebar-foreground: #f4f6ff;
+  --sidebar-primary: #a79aff;
+  --sidebar-primary-foreground: #171a38;
+  --sidebar-accent: #292d53;
+  --sidebar-accent-foreground: #f4f6ff;
+  --sidebar-border: #323956;
+  --sidebar-ring: #a79aff;
+}
+
+/* Prevent low-contrast muted account text on the always-dark sidebar. */
+#asteria-sidebar {
+  --muted: #292d53;
+  --muted-foreground: #b2b9d3;
+  --foreground: #f4f6ff;
+}
+
+::selection {
+  background: var(--asteria-primary-soft);
+  color: var(--foreground);
+}

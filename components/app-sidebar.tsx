@@ -17,6 +17,7 @@ import {
 
 import { signOut } from "@/app/auth/actions";
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 type PageId = "dashboard" | "tasks" | "calendar" | "settings";
 
@@ -199,6 +200,10 @@ export function AppSidebar({
 
         {/* Account stays at the lower-left edge of the sidebar. */}
         <div className="shrink-0 border-t border-sidebar-border p-3">
+          <div className="mb-2 flex items-center justify-between rounded-lg px-1.5 py-1">
+            <span className="text-xs font-medium text-sidebar-foreground/75">Appearance</span>
+            <ThemeToggle className="size-9 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" />
+          </div>
           <div className="flex items-center gap-2">
             <Link
               href="/settings"

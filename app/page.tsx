@@ -5,6 +5,7 @@ import { ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { FeatureSection } from "@/components/feature-section";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 import { getFeaturesByStatus } from "@/features/registry";
 
@@ -24,7 +25,8 @@ export default function HomePage() {
             Asteria
           </Link>
 
-          <nav>
+          <nav className="flex flex-wrap items-center gap-2">
+            <ThemeToggle className="size-9" />
             <Link
               href="/about"
               className={buttonVariants({
@@ -60,7 +62,7 @@ export default function HomePage() {
 
           <h1 className="mt-6 text-5xl font-bold tracking-tight md:text-6xl">
             Manage your life.
-            <span className="block text-blue-500">
+            <span className="block text-primary">
               Intelligently.
             </span>
           </h1>
