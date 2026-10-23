@@ -1,23 +1,22 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import {
+  Bell,
   CalendarDays,
   LayoutDashboard,
   ListTodo,
   LogOut,
   Menu,
-  PanelLeftOpen,
   Settings,
-  Sparkles,
-  X,
 } from "lucide-react";
 
 import { signOut } from "@/app/auth/actions";
-import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { cn } from "@/lib/utils";
 
 type PageId = "dashboard" | "tasks" | "calendar" | "settings";
 
@@ -36,8 +35,6 @@ const navigation = [
   { id: "settings", href: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
-// Keeps compatibility with the previous three-mode sidebar setting.
-// "compact" is treated as open so the sidebar now has only two states.
 const STORAGE_KEY = "asteria:sidebar-mode";
 const SIDEBAR_CHANGED = "asteria:sidebar-changed";
 
@@ -50,7 +47,7 @@ function subscribeToSidebar(callback: () => void) {
   };
 }
 
-function getIsDesktopHidden(): boolean {
+function getIsDesktopHidden() {
   try {
     return window.localStorage.getItem(STORAGE_KEY) === "hidden";
   } catch {
@@ -58,8 +55,14 @@ function getIsDesktopHidden(): boolean {
   }
 }
 
-function getServerDesktopHidden(): boolean {
-  return false;
+function subscribeToDesktop(callback: () => void) {
+  const media = window.matchMedia("(min-width: 64rem)");
+  media.addEventListener("change", callback);
+  return () => media.removeEventListener("change", callback);
+}
+
+function getIsDesktop() {
+  return window.matchMedia("(min-width: 64rem)").matches;
 }
 
 export function AppSidebar({
@@ -70,11 +73,15 @@ export function AppSidebar({
   email,
 }: AppSidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [desktopHoverOpen, setDesktopHoverOpen] = useState(false);
   const desktopHidden = useSyncExternalStore(
     subscribeToSidebar,
     getIsDesktopHidden,
-    getServerDesktopHidden
+    () => false,
   );
+  const isDesktop = useSyncExternalStore(subscribeToDesktop, getIsDesktop, () => false);
+  const desktopExpanded = !desktopHidden || desktopHoverOpen;
+  const navigationExpanded = isDesktop ? desktopExpanded : mobileOpen;
 
   const initials =
     displayName
@@ -90,16 +97,16 @@ export function AppSidebar({
       window.localStorage.setItem(STORAGE_KEY, hidden ? "hidden" : "expanded");
       window.dispatchEvent(new Event(SIDEBAR_CHANGED));
     } catch {
-      // Without localStorage, the desktop sidebar stays expanded.
+      // Keep the expanded state when storage is unavailable.
     }
   }
 
-  // Exactly one closing button, with responsive behavior.
-  function closeSidebar() {
+  function toggleNavigation() {
     if (window.matchMedia("(min-width: 64rem)").matches) {
-      setDesktopHidden(true);
+      setDesktopHidden(!desktopHidden);
+      setDesktopHoverOpen(false);
     } else {
-      setMobileOpen(false);
+      setMobileOpen((open) => !open);
     }
   }
 
@@ -127,53 +134,93 @@ export function AppSidebar({
           type="button"
           aria-label="Tutup sidebar"
           onClick={() => setMobileOpen(false)}
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
         />
       )}
 
-      <aside
-        id="asteria-sidebar"
-        aria-label="Sidebar aplikasi"
-        className={cn(
-          "fixed inset-y-0 left-0 z-50 flex h-dvh w-72 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground",
-          "transition-transform duration-300 motion-reduce:transition-none",
-          mobileOpen ? "visible translate-x-0" : "invisible -translate-x-full",
-          desktopHidden
-            ? "lg:invisible lg:-translate-x-full"
-            : "lg:visible lg:translate-x-0"
-        )}
-      >
-        {/* Header: only ONE closing button, on both mobile and desktop. */}
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-sidebar-border px-4 py-4">
+      <header className="fixed inset-x-0 top-0 z-50 h-16 border-b border-border bg-background/95 px-4 backdrop-blur">
+        <div className="flex h-full items-center gap-3">
+          <button
+            type="button"
+            onClick={toggleNavigation}
+            aria-controls="asteria-sidebar"
+            aria-expanded={navigationExpanded}
+            aria-label={navigationExpanded ? "Tutup sidebar" : "Buka sidebar"}
+            title={navigationExpanded ? "Tutup sidebar" : "Buka sidebar"}
+            className="flex size-10 shrink-0 items-center justify-center rounded-lg hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Menu className="size-6" aria-hidden="true" />
+          </button>
+
           <Link
             href="/dashboard"
             onClick={() => setMobileOpen(false)}
             aria-label="Asteria Dashboard"
-            className="flex min-w-0 items-center gap-3 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            className="flex min-w-0 items-center gap-2 rounded-lg font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground">
-              <Sparkles className="size-5" aria-hidden="true" />
-            </span>
-            <span className="truncate text-lg font-semibold tracking-tight">
-              Asteria
-            </span>
+            <Image src="/brand/asteria-icon.svg" alt="" width={30} height={30} className="size-7 shrink-0 rounded-lg" />
+            <span className="truncate text-base sm:text-lg">Asteria</span>
           </Link>
 
-          <button
-            type="button"
-            onClick={closeSidebar}
-            aria-label="Tutup sidebar"
-            aria-controls="asteria-sidebar"
-            title="Tutup sidebar"
-            className="flex size-9 shrink-0 items-center justify-center rounded-lg hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-          >
-            <X className="size-5" aria-hidden="true" />
-          </button>
-        </div>
+          <div className="ml-auto flex items-center gap-1">
+            <button
+              type="button"
+              aria-label="Notifications"
+              title="Notifications"
+              className="flex size-10 items-center justify-center rounded-lg hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Bell className="size-5" aria-hidden="true" />
+            </button>
 
+            <ThemeToggle className="size-10 text-foreground hover:bg-muted" />
+
+            <Link
+              href="/settings"
+              onClick={() => setMobileOpen(false)}
+              aria-label="Buka profil dan pengaturan"
+              title={`${displayName} · ${email}`}
+              className="flex size-10 items-center justify-center rounded-full outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span
+                aria-hidden="true"
+                className="flex size-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground"
+              >
+                {initials}
+              </span>
+            </Link>
+
+            <form action={signOut}>
+              <button
+                type="submit"
+                aria-label="Logout"
+                title="Logout"
+                className="flex size-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <LogOut className="size-4" aria-hidden="true" />
+              </button>
+            </form>
+          </div>
+        </div>
+      </header>
+
+      <aside
+        id="asteria-sidebar"
+        aria-label="Sidebar aplikasi"
+        onMouseEnter={() => {
+          if (desktopHidden) setDesktopHoverOpen(true);
+        }}
+        onMouseLeave={() => setDesktopHoverOpen(false)}
+        className={cn(
+          "fixed bottom-0 left-0 top-16 z-40 flex h-[calc(100dvh-4rem)] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl",
+          "w-72 -translate-x-full transition-[width,transform] duration-200 motion-reduce:transition-none",
+          "lg:translate-x-0",
+          desktopExpanded ? "lg:w-72" : "lg:w-[4.5rem]",
+          mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+        )}
+      >
         <nav
           aria-label="Navigasi utama"
-          className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-5"
+          className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 py-4"
         >
           {navigation.map((item) => {
             const Icon = item.icon;
@@ -184,107 +231,35 @@ export function AppSidebar({
                 href={item.href}
                 onClick={() => setMobileOpen(false)}
                 aria-current={isActive ? "page" : undefined}
+                title={!desktopExpanded ? item.label : undefined}
                 className={cn(
-                  "flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium",
-                  "transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
-                  isActive && "bg-sidebar-accent text-sidebar-accent-foreground"
+                  "flex min-h-11 items-center gap-3 rounded-xl text-sm font-medium transition-colors",
+                  "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+                  "justify-start px-[18px]",
+                  isActive && "bg-sidebar-accent text-sidebar-accent-foreground",
                 )}
               >
                 <Icon className="size-5 shrink-0" aria-hidden="true" />
-                <span className="truncate">{item.label}</span>
+                <span className={cn("truncate", desktopExpanded ? "lg:block" : "lg:hidden")}>
+                  {item.label}
+                </span>
               </Link>
             );
           })}
         </nav>
 
-        {/* Account stays at the lower-left edge of the sidebar. */}
-        <div className="shrink-0 border-t border-sidebar-border p-3">
-          <div className="mb-2 flex items-center justify-between rounded-lg px-1.5 py-1">
-            <span className="text-xs font-medium text-sidebar-foreground/75">Appearance</span>
-            <ThemeToggle className="size-9 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" />
-          </div>
-          <div className="flex items-center gap-2">
-            <Link
-              href="/settings"
-              onClick={() => setMobileOpen(false)}
-              title="Buka profil dan pengaturan"
-              className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1.5 hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-            >
-              <span
-                aria-hidden="true"
-                className="flex size-10 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-sm font-semibold text-sidebar-primary-foreground"
-              >
-                {initials}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold">
-                  {displayName}
-                </span>
-                <span className="block truncate text-xs text-muted-foreground">
-                  {email}
-                </span>
-              </span>
-            </Link>
-
-            <form action={signOut} className="shrink-0">
-              <button
-                type="submit"
-                aria-label="Logout"
-                title="Logout"
-                className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-              >
-                <LogOut className="size-4" aria-hidden="true" />
-              </button>
-            </form>
-          </div>
-        </div>
       </aside>
 
       <div
         className={cn(
-          "flex min-h-dvh min-w-0 flex-col transition-[padding-left] duration-300 motion-reduce:transition-none",
-          desktopHidden ? "lg:pl-0" : "lg:pl-72"
+          "flex min-h-dvh min-w-0 flex-col pt-16 transition-[padding-left] duration-200 motion-reduce:transition-none",
+          desktopHidden ? "lg:pl-[4.5rem]" : "lg:pl-72",
         )}
       >
-        {/* Mobile opener: behind the drawer while open. */}
-        <div className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur lg:hidden">
-          <button
-            type="button"
-            aria-label="Buka sidebar"
-            aria-controls="asteria-sidebar"
-            aria-expanded={mobileOpen}
-            onClick={() => setMobileOpen(true)}
-            className="flex size-10 items-center justify-center rounded-lg hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <Menu className="size-5" aria-hidden="true" />
-          </button>
-          <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
-            <Sparkles className="size-5 text-primary" aria-hidden="true" />
-            Asteria
-          </Link>
-        </div>
-
-        {/* Desktop opener: visible only when the sidebar is hidden. */}
-        {desktopHidden && (
-          <div className="sticky top-0 z-30 hidden h-14 items-center border-b bg-background/95 px-5 backdrop-blur lg:flex">
-            <button
-              type="button"
-              onClick={() => setDesktopHidden(false)}
-              aria-controls="asteria-sidebar"
-              aria-expanded={false}
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <PanelLeftOpen className="size-5" aria-hidden="true" />
-              Tampilkan sidebar
-            </button>
-          </div>
-        )}
-
         <main
           className={cn(
             "mx-auto w-full min-w-0 flex-1",
-            workspace ? "max-w-[1440px]" : "max-w-6xl px-4 py-10 sm:px-6"
+            workspace ? "max-w-[1440px]" : "max-w-6xl px-4 py-10 sm:px-6",
           )}
         >
           {children}

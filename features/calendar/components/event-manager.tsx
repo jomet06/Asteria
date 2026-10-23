@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { WorkspaceDialog } from "@/features/tasks/components/workspace-dialog";
 
 import { parseRecurrence } from "../recurrence";
 
@@ -565,6 +566,7 @@ export function EventManager({
       {tasksTruncated && <p role="status" className="text-sm text-muted-foreground">The task selector shows the first 500 tasks.</p>}
       {/* EVENT EDITOR */}
       {editor && (
+        <WorkspaceDialog open={Boolean(editor)} onOpenChange={(open) => { if (!open && !pending) setEditor(null); }} title={editing ? "Edit event" : "New event"} description="Schedule an event with dates, timezone, recurrence, or a task time block.">
         <section
           aria-label={
             editing ? "Edit event" : "Create event"
@@ -700,6 +702,7 @@ export function EventManager({
             </div>
           </form>
         </section>
+        </WorkspaceDialog>
       )}
 
       {/* MONTH NAVIGATION */}

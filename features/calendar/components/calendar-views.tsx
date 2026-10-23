@@ -195,7 +195,7 @@ function MonthGrid({
   onSelect: (id: string) => void;
 }) {
   const first = mondayOf(`${month}-01`);
-  const days = Array.from({ length: 42 }, (_, i) => addDays(first, i));
+  const days = Array.from({ length: 35 }, (_, i) => addDays(first, i));
 
   return (
     <div className="overflow-x-auto rounded-xl border bg-card">

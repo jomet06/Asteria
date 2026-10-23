@@ -42,15 +42,15 @@
   --chart-4: #f3c66d;
   --chart-5: #4461a7;
 
-  /* Deep-indigo sidebar in both themes */
-  --sidebar: #171a38;
-  --sidebar-foreground: #f4f6ff;
-  --sidebar-primary: #b6a8ff;
-  --sidebar-primary-foreground: #171a38;
-  --sidebar-accent: #292d53;
-  --sidebar-accent-foreground: #f4f6ff;
-  --sidebar-border: #323956;
-  --sidebar-ring: #b6a8ff;
+  /* Sidebar colors: light mode */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1b2140;
+  --sidebar-primary: #6757e8;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #efecff;
+  --sidebar-accent-foreground: #352686;
+  --sidebar-border: #e7eaf3;
+  --sidebar-ring: #6757e8;
 }
 
 .dark {
@@ -91,13 +91,6 @@
   --sidebar-accent-foreground: #f4f6ff;
   --sidebar-border: #323956;
   --sidebar-ring: #a79aff;
-}
-
-/* Prevent low-contrast muted account text on the always-dark sidebar. */
-#asteria-sidebar {
-  --muted: #292d53;
-  --muted-foreground: #b2b9d3;
-  --foreground: #f4f6ff;
 }
 
 ::selection {

@@ -21,6 +21,7 @@ import {
   Inbox,
   Menu,
   Plus,
+  SlidersHorizontal,
   X,
 } from "lucide-react";
 
@@ -172,6 +173,8 @@ export function TaskWorkspace({
 
   const [navigationOpen, setNavigationOpen] =
     useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [newTaskOpen, setNewTaskOpen] = useState(false);
 
   const [showCompleted, setShowCompleted] =
     useState(false);
@@ -380,6 +383,18 @@ export function TaskWorkspace({
     />
   );
 
+  const compactSidebar = (
+    <TodoSidebar
+      projects={projects}
+      tasks={tasks}
+      view={view}
+      onNavigate={navigate}
+      actions={actions}
+      onResult={onResult}
+      compact
+    />
+  );
+
   // ========================================
   // EMPTY STATE
   // ========================================
@@ -396,15 +411,7 @@ export function TaskWorkspace({
     filtersActive || showCompleted;
 
   return (
-    <div className="min-w-0 lg:grid lg:grid-cols-[240px_minmax(0,1fr)]">
-      {/* ====================================
-          DESKTOP SIDEBAR
-      ==================================== */}
-
-      <div className="hidden min-h-[calc(100dvh-77px)] border-r border-border/60 bg-muted/20 px-4 py-7 lg:block">
-        {sidebar}
-      </div>
-
+    <div className="min-w-0">
       {/* ====================================
           MAIN WORKSPACE
       ==================================== */}
@@ -413,6 +420,10 @@ export function TaskWorkspace({
         aria-labelledby="workspace-title"
         className="mx-auto w-full min-w-0 max-w-4xl px-4 pt-3 pb-28 sm:px-8 sm:pt-10 lg:px-12 lg:pb-16"
       >
+        <div className="mb-5 hidden lg:mb-7 lg:block">
+          {compactSidebar}
+        </div>
+
         <div className="mb-3 flex items-center justify-between gap-3 sm:mb-6">
           <p className="text-xs font-medium tracking-[0.14em] text-muted-foreground uppercase">
             Your workspace
@@ -518,30 +529,18 @@ export function TaskWorkspace({
 
         {/* QUICK ADD */}
 
-        <div
-          hidden={project?.isArchived}
-          className="mb-7"
-        >
-          <QuickAddTask
-            projects={projects}
-            view={view}
-            actions={actions}
-            onResult={onResult}
-            inputRef={composerRef}
-          />
+        <div className="mb-7 flex flex-wrap gap-2">
+          {!project?.isArchived && <Button type="button" onClick={() => setNewTaskOpen(true)}><Plus /> New task</Button>}
+          <Button type="button" variant={filtersActive ? "secondary" : "outline"} onClick={() => setFilterOpen(true)}><SlidersHorizontal /> Filters{filtersActive ? " active" : ""}</Button>
         </div>
 
         {/* ====================================
             NEW: TASK FILTER BAR
         ==================================== */}
 
-        <TaskFilterBar
-          value={filters}
-          onChange={setFilters}
-          onClear={clearFilters}
-          matchingCount={visibleTasks.length}
-          totalCount={scopedTasks.length}
-        />
+        <WorkspaceDialog open={filterOpen} onOpenChange={setFilterOpen} title="Filter and sort tasks" description="Narrow your task list without leaving the page.">
+          <TaskFilterBar value={filters} onChange={setFilters} onClear={clearFilters} matchingCount={visibleTasks.length} totalCount={scopedTasks.length} />
+        </WorkspaceDialog>
 
         {/* ====================================
             ACTIVE TASK LIST
@@ -560,6 +559,8 @@ export function TaskWorkspace({
             />
           </>
         )}
+
+        {!project?.isArchived && <Button type="button" variant="outline" className="mt-6 w-full border-dashed" onClick={() => setNewTaskOpen(true)}><Plus /> New task</Button>}
 
         {/* ====================================
             NO MATCHING RESULTS
@@ -683,6 +684,10 @@ export function TaskWorkspace({
           </div>
         )}
       </section>
+
+      <WorkspaceDialog open={newTaskOpen} onOpenChange={setNewTaskOpen} title="New task" description="Capture the next thing you want to get done.">
+        <QuickAddTask projects={projects} view={view} actions={actions} onResult={onResult} inputRef={composerRef} onAdded={() => setNewTaskOpen(false)} />
+      </WorkspaceDialog>
 
       {/* ====================================
           MOBILE BOTTOM BAR

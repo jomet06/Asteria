@@ -9,13 +9,14 @@ import type { OnWorkspaceResult, WorkspaceActions, WorkspaceProject, WorkspaceTa
 import { workspaceHref } from "../workspace-view";
 import { CreateProjectButton, ProjectMenu } from "./project-manager";
 
-export function TodoSidebar({ projects, tasks, view, onNavigate, actions, onResult }: {
+export function TodoSidebar({ projects, tasks, view, onNavigate, actions, onResult, compact = false }: {
   projects: WorkspaceProject[];
   tasks: WorkspaceTask[];
   view: string;
   onNavigate: (view: string) => void;
   actions: WorkspaceActions;
   onResult: OnWorkspaceResult;
+  compact?: boolean;
 }) {
   const archivedId = useId();
   const [archivedExpanded, setArchivedExpanded] = useState<boolean | null>(null);
@@ -36,7 +37,8 @@ export function TodoSidebar({ projects, tasks, view, onNavigate, actions, onResu
           }
         }}
         className={cn(
-          "flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-lg px-3 py-2 text-sm outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring",
+          "flex min-h-11 min-w-0 items-center gap-2.5 rounded-lg px-3 py-2 text-sm outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring",
+          compact ? "flex-none" : "flex-1",
           view === id && "bg-secondary font-medium text-secondary-foreground"
         )}
       >
@@ -52,6 +54,40 @@ export function TodoSidebar({ projects, tasks, view, onNavigate, actions, onResu
         {viewLink(project.id, project.name, activeTasks.filter((task) => task.projectId === project.id).length, project.isArchived ? <Archive className="size-4 shrink-0 text-muted-foreground" /> : <Folder className="size-4 shrink-0 text-muted-foreground" />)}
         <ProjectMenu project={project} view={view} actions={actions} onResult={onResult} />
       </div>
+    );
+  }
+
+  if (compact) {
+    return (
+      <nav aria-label="To-Do List views" className="rounded-2xl border bg-card/70 p-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="px-2 text-xs font-medium tracking-wide text-muted-foreground">Views</span>
+          {viewLink("all", "All Tasks", activeTasks.length, <ListTodo className="size-4 shrink-0" />)}
+          {viewLink("inbox", "Inbox", activeTasks.filter((task) => !task.projectId).length, <Inbox className="size-4 shrink-0" />)}
+        </div>
+
+        <div className="mt-2 flex flex-wrap items-center gap-1 border-t px-2 pt-2">
+          <span className="mr-1 text-xs font-medium tracking-wide text-muted-foreground">Projects</span>
+          <CreateProjectButton view={view} actions={actions} onResult={onResult} />
+          {activeProjects.length > 0 ? activeProjects.map(projectRow) : <span className="px-2 text-sm text-muted-foreground">No projects yet</span>}
+          <Button
+            type="button"
+            variant="ghost"
+            className="min-h-11 gap-2 px-3 font-normal text-muted-foreground"
+            aria-expanded={showArchived}
+            aria-controls={archivedId}
+            onClick={() => setArchivedExpanded(!showArchived)}
+          >
+            <ChevronDown className={cn("size-3.5 transition-transform", !showArchived && "-rotate-90")} />
+            <span className="text-xs">Archived</span>
+            {archivedProjects.length > 0 && <span className="text-xs tabular-nums">{archivedProjects.length}</span>}
+          </Button>
+        </div>
+
+        <div id={archivedId} hidden={!showArchived} className="mt-2 flex flex-wrap items-center gap-1 border-t px-2 pt-2">
+          {archivedProjects.length ? archivedProjects.map(projectRow) : <p className="px-2 py-1 text-sm text-muted-foreground">No archived projects.</p>}
+        </div>
+      </nav>
     );
   }
 

@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="380 235 490 490"   role="img" aria-label="Asteria">
+<title>Asteria</title><defs>
+  <radialGradient id="violetBody" cx="48%" cy="52%" r="70%">
+    <stop offset="0" stop-color="#BE87AF"/>
+    <stop offset=".18" stop-color="#A06EA9"/>
+    <stop offset=".43" stop-color="#6343A5"/>
+    <stop offset=".67" stop-color="#32206C"/>
+    <stop offset="1" stop-color="#17103F"/>
+  </radialGradient>
+  <linearGradient id="violetShimmer" x1="21%" y1="70%" x2="79%" y2="28%">
+    <stop offset="0" stop-color="#C78EAD" stop-opacity="0"/>
+    <stop offset=".45" stop-color="#D5A9BF" stop-opacity=".4"/>
+    <stop offset="1" stop-color="#BF97F4" stop-opacity="0"/>
+  </linearGradient>
+  <radialGradient id="goldenCore" cx="50%" cy="50%" r="57%">
+    <stop offset="0" stop-color="#FFFEF1"/>
+    <stop offset=".20" stop-color="#FFF5E0"/>
+    <stop offset=".49" stop-color="#FBE4C6"/>
+    <stop offset=".77" stop-color="#F0BF8F" stop-opacity=".78"/>
+    <stop offset="1" stop-color="#F8CBA0" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="softGlow">
+    <stop offset="0" stop-color="#FFE7BE" stop-opacity=".68"/>
+    <stop offset=".6" stop-color="#F6D6B4" stop-opacity=".20"/>
+    <stop offset="1" stop-color="#FFEBCD" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="goldAccent" x1="0" x2="1" y1="0" y2="1">
+    <stop offset="0" stop-color="#C99256"/>
+    <stop offset=".51" stop-color="#E9BA72"/>
+    <stop offset="1" stop-color="#C99550"/>
+  </linearGradient>
+</defs>
+
+<g id="asteria-star-emblem">
+  <path d="M 625 285 C 632 398 670 472 815 491 C 672 507 634 573 625 686 C 617 570 579 506 435 491 C 579 474 617 401 625 285 Z" fill="url(#violetBody)"/>
+  <path d="M 625 285 C 632 398 670 472 815 491 C 672 507 634 573 625 686 C 617 570 579 506 435 491 C 579 474 617 401 625 285 Z" fill="url(#violetShimmer)" opacity=".45"/>
+  <ellipse cx="625" cy="491" rx="100" ry="100" fill="url(#softGlow)"/>
+  <path d="M 625 368 C 628 440 646 482 724 491 C 647 501 632 538 625 612 C 619 537 601 501 527 491 C 601 481 621 442 625 368 Z" fill="url(#goldenCore)"/>
+  <g stroke="url(#goldAccent)" stroke-linecap="round" stroke-width="3.3" fill="none">
+    <path d="M 511 382 L 545 415"/>
+    <path d="M 740 382 L 707 415"/>
+    <path d="M 511 600 L 544 566"/>
+    <path d="M 740 600 L 707 566"/>
+  </g>
+  <g fill="#D6A35C">
+    <circle cx="625.5" cy="265" r="5.7"/>
+    <circle cx="839.5" cy="491.7" r="5.7"/>
+    <circle cx="625.5" cy="707" r="5.7"/>
+    <circle cx="410.5" cy="491.7" r="5.7"/>
+  </g>
+</g>
+</svg>
