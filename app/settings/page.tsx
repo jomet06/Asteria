@@ -12,9 +12,11 @@ import {
 
 import { getMyAccount } from "@/features/profile/data";
 import { updateMyProfile } from "@/features/profile/actions";
-import { getMyGoogleCalendarConnection } from "@/features/calendar/google/data";
+import { getMyGoogleCalendarConnection, getMyGoogleCalendarSources } from "@/features/calendar/google/data";
 import { googleCalendarConfigured } from "@/features/calendar/google/config";
 import { disconnectGoogleCalendar } from "@/features/calendar/google/actions";
+import { loadGoogleCalendars } from "@/features/calendar/google/import-actions";
+import { GoogleCalendarSyncForm } from "@/features/calendar/google/google-calendar-sync-form";
 
 export const instant = false;
 
@@ -35,6 +37,11 @@ const googleMessages: Record<string, string> = {
   oauth_error: "Google authorization failed. Check the OAuth client and permissions, then retry.",
   refresh_required: "Google did not provide an offline refresh token. Reconnect and allow access.",
   config_error: "Google Calendar OAuth configuration is missing or invalid.",
+  calendars_loaded: "Google calendars loaded. Select up to three calendars and sync them.",
+  no_calendars_selected: "Select at least one calendar before syncing.",
+  invalid_calendars: "One or more selected calendars are no longer available.",
+  sync_truncated: "Google returned more than the safe event limit. Existing imported events were preserved.",
+  synced: "Google Calendar sync completed successfully.",
 };
 
 export default async function SettingsPage({
@@ -46,6 +53,7 @@ export default async function SettingsPage({
   const { status, error, google } = await searchParams;
   const { user, profile } = await getMyAccount();
   const googleConnection = await getMyGoogleCalendarConnection();
+  const googleSources = googleConnection ? await getMyGoogleCalendarSources() : [];
   const canConnectGoogle = googleCalendarConfigured();
   const googleMessage =
     typeof google === "string" && Object.hasOwn(googleMessages, google)
@@ -125,9 +133,13 @@ export default async function SettingsPage({
                   Connected to <strong>{googleConnection.googleEmail ?? "Google account"}</strong>.
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  No Google events are imported yet. Disconnecting removes
-                  Asteria&apos;s local authorization token, not your Google events.
+                  Imported events are read-only in Asteria. Disconnecting removes
+                  Asteria&apos;s local connection and imported mirrors, not your Google events.
                 </p>
+                <form action={loadGoogleCalendars}>
+                  <Button type="submit" variant="outline">Load Google Calendars</Button>
+                </form>
+                {googleSources.length > 0 && <GoogleCalendarSyncForm sources={googleSources} />}
                 <form action={disconnectGoogleCalendar}>
                   <Button type="submit" variant="outline">Disconnect Google Calendar</Button>
                 </form>

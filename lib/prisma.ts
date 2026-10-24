@@ -20,6 +20,8 @@ const globalForPrisma = globalThis as unknown as {
 const schemaSignature = JSON.stringify({
   calendarEvent: Prisma.CalendarEventScalarFieldEnum,
   googleCalendarConnection: Prisma.GoogleCalendarConnectionScalarFieldEnum,
+  googleCalendarSource: Prisma.GoogleCalendarSourceScalarFieldEnum,
+  googleEventMirror: Prisma.GoogleEventMirrorScalarFieldEnum,
 });
 
 const cachedClient =

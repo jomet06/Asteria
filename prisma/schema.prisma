@@ -22,6 +22,8 @@ model Profile {
   tasks                    Task[]
   calendarEvents           CalendarEvent[]
   googleCalendarConnection GoogleCalendarConnection?
+  googleCalendarSources    GoogleCalendarSource[]
+  googleEventMirrors       GoogleEventMirror[]
 
   @@map("profiles")
 }
@@ -171,8 +173,58 @@ model GoogleCalendarConnection {
   updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   owner Profile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  sources GoogleCalendarSource[]
 
   @@map("google_calendar_connections")
+}
+
+model GoogleCalendarSource {
+  id                 String   @id @default(uuid()) @db.Uuid
+  ownerId            String   @map("owner_id") @db.Uuid
+  connectionOwnerId  String   @map("connection_owner_id") @db.Uuid
+  googleCalendarId   String   @map("google_calendar_id") @db.VarChar(512)
+  name               String   @db.VarChar(255)
+  isPrimary          Boolean  @default(false) @map("is_primary")
+  selected           Boolean  @default(false)
+  syncStatus         String   @default("idle") @map("sync_status") @db.VarChar(32)
+  lastSuccessfulSync DateTime? @map("last_successful_sync") @db.Timestamptz(3)
+  lastSyncError      String?  @map("last_sync_error") @db.Text
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  owner      Profile                  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  connection GoogleCalendarConnection @relation(fields: [connectionOwnerId], references: [ownerId], onDelete: Cascade)
+  events     GoogleEventMirror[]
+
+  @@unique([connectionOwnerId, googleCalendarId], map: "google_calendar_sources_connection_calendar_unique")
+  @@index([ownerId, selected], map: "google_calendar_sources_owner_selected_idx")
+  @@map("google_calendar_sources")
+}
+
+model GoogleEventMirror {
+  id              String   @id @default(uuid()) @db.Uuid
+  ownerId         String   @map("owner_id") @db.Uuid
+  sourceId        String   @map("source_id") @db.Uuid
+  googleEventId   String   @map("google_event_id") @db.VarChar(512)
+  title           String   @db.VarChar(500)
+  description     String?  @db.Text
+  location        String?  @db.VarChar(1000)
+  startsAt        DateTime @map("starts_at") @db.Timestamptz(3)
+  endsAt          DateTime @map("ends_at") @db.Timestamptz(3)
+  timezone        String   @db.VarChar(64)
+  isAllDay        Boolean  @default(false) @map("is_all_day")
+  htmlLink        String?  @map("html_link") @db.VarChar(2000)
+  googleUpdatedAt DateTime? @map("google_updated_at") @db.Timestamptz(3)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  owner  Profile              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  source GoogleCalendarSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, googleEventId], map: "google_event_mirrors_source_event_unique")
+  @@index([ownerId, startsAt], map: "google_event_mirrors_owner_starts_idx")
+  @@index([sourceId, startsAt], map: "google_event_mirrors_source_starts_idx")
+  @@map("google_event_mirrors")
 }
 
 // ========================================

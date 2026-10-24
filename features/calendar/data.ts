@@ -17,7 +17,7 @@ export type CalendarEventView = {
   seriesId?: string;
   originalStart?: string;
   taskId?: string | null;
-  kind?: "event" | "deadline" | "planner" | "block";
+  kind?: "event" | "deadline" | "planner" | "block" | "google";
   href?: string;
   seriesStartsAt?: string;
   seriesEndsAt?: string;
@@ -124,6 +124,35 @@ export async function loadCalendarEvents(ownerId: string, from: Date, to: Date) 
       if (item.isCancelled || item.startsAt >= to || item.endsAt <= from) continue;
       events.push({ id: item.id, seriesId: row.id, originalStart: item.originalStart!.toISOString(), title: item.title, description: item.description, location: item.location, startsAt: item.startsAt.toISOString(), endsAt: item.endsAt.toISOString(), timezone: readCalendarTimezone(item.timezone), isAllDay: item.isAllDay, recurrenceRule: row.recurrenceRule, taskId: row.taskId, kind: row.taskId ? "block" : "event", seriesStartsAt: row.startsAt.toISOString(), seriesEndsAt: row.endsAt.toISOString() });
     }
+  }
+  // Google mirrors are additive and remain read-only. The migration is optional
+  // during rollout, so an absent table must not hide internal calendar events.
+  try {
+    const mirrors = await prisma.googleEventMirror.findMany({
+      where: { ownerId, startsAt: { lt: to }, endsAt: { gt: from } },
+      include: { source: { select: { name: true } } },
+      orderBy: [{ startsAt: "asc" }, { id: "asc" }],
+      take: 501,
+    });
+    for (const mirror of mirrors.slice(0, 500)) {
+      events.push({
+        id: `google:${mirror.sourceId}:${mirror.googleEventId}`,
+        title: mirror.title,
+        description: mirror.description,
+        location: mirror.location,
+        startsAt: mirror.startsAt.toISOString(),
+        endsAt: mirror.endsAt.toISOString(),
+        timezone: readCalendarTimezone(mirror.timezone),
+        isAllDay: mirror.isAllDay,
+        recurrenceRule: null,
+        kind: "google",
+        href: mirror.htmlLink ?? undefined,
+      });
+    }
+    if (mirrors.length > 500) truncated = true;
+  } catch (error) {
+    const failure = error as { code?: string };
+    if (failure.code !== "P2021" && failure.code !== "P2022") throw error;
   }
   events.sort((a, b) => a.startsAt.localeCompare(b.startsAt) || a.id.localeCompare(b.id));
   return { events: events.slice(0, 500), truncated: truncated || events.length > 500, schemaPending };

@@ -172,7 +172,7 @@ function EventChip({
       data-kind={event.kind}
       aria-label={`View event: ${event.title}`}
       onClick={() => onSelect(event.id)}
-      className="block w-full min-w-0 rounded-md border data-[kind=deadline]:border-amber-500 data-[kind=deadline]:bg-amber-500/15 data-[kind=planner]:border-emerald-500 data-[kind=planner]:bg-emerald-500/15 data-[kind=block]:border-violet-500 data-[kind=block]:bg-violet-500/15 border-primary/25 bg-primary/10 px-1.5 py-1 text-left text-xs text-foreground outline-none hover:bg-primary/20 focus-visible:ring-2 focus-visible:ring-ring"
+      className="block w-full min-w-0 rounded-md border data-[kind=deadline]:border-amber-500 data-[kind=deadline]:bg-amber-500/15 data-[kind=planner]:border-emerald-500 data-[kind=planner]:bg-emerald-500/15 data-[kind=block]:border-violet-500 data-[kind=block]:bg-violet-500/15 data-[kind=google]:border-sky-500 data-[kind=google]:bg-sky-500/15 border-primary/25 bg-primary/10 px-1.5 py-1 text-left text-xs text-foreground outline-none hover:bg-primary/20 focus-visible:ring-2 focus-visible:ring-ring"
     >
       <span className="block truncate font-medium">
         {!compact && `${eventLabel(event, timezone)} · `}{event.title}
@@ -309,7 +309,7 @@ function TimeGrid({
                   aria-label={`View event: ${event.title}`}
                   onClick={() => onSelect(event.id)}
                   data-kind={event.kind}
-                  className="data-[kind=deadline]:border-amber-500 data-[kind=deadline]:bg-amber-500/20 data-[kind=block]:border-violet-500 data-[kind=block]:bg-violet-500/20 absolute z-10 overflow-hidden rounded-md border border-primary/35 bg-primary/15 px-1 py-0.5 text-left text-[11px] leading-tight text-foreground outline-none hover:bg-primary/25 focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-ring"
+                  className="data-[kind=deadline]:border-amber-500 data-[kind=deadline]:bg-amber-500/20 data-[kind=block]:border-violet-500 data-[kind=block]:bg-violet-500/20 data-[kind=google]:border-sky-500 data-[kind=google]:bg-sky-500/20 absolute z-10 overflow-hidden rounded-md border border-primary/35 bg-primary/15 px-1 py-0.5 text-left text-[11px] leading-tight text-foreground outline-none hover:bg-primary/25 focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-ring"
                   style={{
                     top: (start / 60) * HOUR_HEIGHT,
                     height: Math.max(20, ((end - start) / 60) * HOUR_HEIGHT),
@@ -433,7 +433,7 @@ export function CalendarViews({
           {selected.location && <p className="flex items-center gap-2 text-sm"><MapPin className="size-4" />{selected.location}</p>}
           {selected.description && <p className="whitespace-pre-wrap text-sm text-muted-foreground">{selected.description}</p>}
           <a href={selected.href ?? `${calendarHref(view, formatCalendarLocal(selected.startsAt, timezone).slice(0, 10))}#event-manager`} className="inline-block text-sm font-medium text-primary underline-offset-4 hover:underline">
-            {selected.href ? "Open original task or planner" : "Manage events (edit or delete)"}
+            {selected.kind === "google" ? "Open in Google Calendar" : selected.href ? "Open original task or planner" : "Manage events (edit or delete)"}
           </a>
         </section>
       )}
