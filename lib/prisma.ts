@@ -15,9 +15,11 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 // Next.js development can keep globalThis alive after Prisma Client
-// is regenerated. Include both Calendar and Google connection models
-// so an instance created before M3.7.1 is never reused.
+// is regenerated. Include one field enum per model that gains new
+// columns over time so an instance created before a regeneration
+// is never reused with queries it cannot understand.
 const schemaSignature = JSON.stringify({
+  task: Prisma.TaskScalarFieldEnum,
   calendarEvent: Prisma.CalendarEventScalarFieldEnum,
   googleCalendarConnection: Prisma.GoogleCalendarConnectionScalarFieldEnum,
   googleCalendarSource: Prisma.GoogleCalendarSourceScalarFieldEnum,
