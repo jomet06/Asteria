@@ -64,9 +64,22 @@ export function readEventFields(
   let endsAt: Date;
 
   if (isAllDay) {
+    const startDay = formData.get("startDate");
+    const endDayInput = formData.get("endDate");
+    // Recurring all-day series may omit the end date and default to
+    // one-day instances instead of being blocked by validation.
+    const recurring =
+      typeof formData.get("recurrenceRule") === "string" &&
+      formData.get("recurrenceRule") !== "";
+    const endDay =
+      typeof endDayInput === "string" && endDayInput !== ""
+        ? endDayInput
+        : recurring
+          ? startDay
+          : endDayInput;
     const range = parseAllDayRange(
-      formData.get("startDate"),
-      formData.get("endDate"),
+      startDay,
+      endDay,
       timezoneValue
     );
 

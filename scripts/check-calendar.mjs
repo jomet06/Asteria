@@ -182,7 +182,7 @@ test("adjacent events save without conflict confirmation", async () => {
 });
 test("calendar projection includes only own events, task deadlines and planner entries", async () => {
   const h = harness(); const result = await h.data().getMyCalendarMonth("2026-10");
-  assert.equal(result.events.length, 3); assert.equal(result.tasks.length, 1);
+  assert.equal(result.events.length, 3);
   assert.deepEqual(result.events.map((e) => e.kind), ["event", "deadline", "planner"]);
   assert.equal(result.events[2].href, "/tasks/planner?date=2026-10-21");
   h.tasks[0].dueAt = date("2027-01-01T00:00Z");

@@ -318,7 +318,7 @@ function TimeGrid({
                   }}
                 >
                   <span className="block truncate font-semibold">{event.title}</span>
-                  <span className="block truncate">{eventLabel(event, timezone)} ? {formatCalendarLocal(event.endsAt, timezone).slice(11, 16)}</span>
+                  <span className="block truncate">{eventLabel(event, timezone)} – {formatCalendarLocal(event.endsAt, timezone).slice(11, 16)}</span>
                 </button>
               ))}
             </div>
@@ -408,7 +408,13 @@ export function CalendarViews({
         </p>
       )}
 
-      <p className="text-xs text-muted-foreground">Events ? Amber: task deadlines ? Green: daily plans ? Violet: task time blocks</p>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-primary/60" aria-hidden />Event</span>
+        <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-amber-500" aria-hidden />Task deadline</span>
+        <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-emerald-500" aria-hidden />Daily plan</span>
+        <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-violet-500" aria-hidden />Time block</span>
+        <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-sky-500" aria-hidden />From Google</span>
+      </div>
       {events.length === 0 && <p role="status" className="rounded-lg border p-4 text-sm text-muted-foreground">No events, deadlines or plans in this period.</p>}
       {view === "month" ? (
         <MonthGrid month={month} today={today} timezone={timezone} events={events} onSelect={setSelectedId} />
@@ -437,9 +443,6 @@ export function CalendarViews({
           </a>
         </section>
       )}
-      <p className="text-xs text-muted-foreground">
-        Times are displayed in {timezone}. Open an event to inspect its details; use the event manager below to edit or delete it.
-      </p>
     </section>
   );
 }

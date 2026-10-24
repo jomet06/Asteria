@@ -41,10 +41,9 @@ export async function getMyCalendarMonth(requestedMonth: unknown) {
   // A fixed 42-cell month grid can extend 13 days into the following month.
   const to = new Date(range.to.getTime() + 14 * 86_400_000);
   const { events: calendarEvents, truncated: eventTruncated, schemaPending } = await loadCalendarEvents(user.id, from, to);
-  const [deadlines, plans, tasks] = await Promise.all([
+  const [deadlines, plans] = await Promise.all([
     prisma.task.findMany({ where: { ownerId: user.id, status: { not: "CANCELLED" }, dueAt: { gte: from, lt: to } }, orderBy: [{ dueAt: "asc" }, { id: "asc" }], take: 501 }),
     prisma.dailyPlanItem.findMany({ where: { ownerId: user.id, plannedDate: { gte: new Date(`${formatCalendarLocal(from, timezone).slice(0, 10)}T00:00:00Z`), lt: new Date(`${formatCalendarLocal(to, timezone).slice(0, 10)}T00:00:00Z`) } }, include: { task: true }, orderBy: [{ plannedDate: "asc" }, { position: "asc" }, { id: "asc" }], take: 501 }),
-    prisma.task.findMany({ where: { ownerId: user.id }, select: { id: true, title: true }, orderBy: [{ title: "asc" }, { id: "asc" }], take: 501 }),
   ]);
   const projections: CalendarEventView[] = [];
   for (const task of deadlines.slice(0, 500)) {
@@ -62,8 +61,6 @@ export async function getMyCalendarMonth(requestedMonth: unknown) {
   return {
     events,
     schemaPending,
-    tasks: tasks.slice(0, 500),
-    tasksTruncated: tasks.length > 500,
     timezone,
     month,
     monthLabel: range.label,
