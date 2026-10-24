@@ -13,6 +13,7 @@ import {
   AlignLeft,
   CalendarDays,
   Clock3,
+  ExternalLink,
   MapPin,
   Pencil,
   Plus,
@@ -21,9 +22,13 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { WorkspaceDialog } from "@/features/tasks/components/workspace-dialog";
+import {
+  ConfirmDialog,
+  WorkspaceDialog,
+} from "@/features/tasks/components/workspace-dialog";
 
 import { parseRecurrence } from "../recurrence";
+import { calendarMonthRange } from "../date-time";
 
 import type {
   CalendarActionResult,
@@ -40,6 +45,11 @@ import {
   type CalendarTimezone,
 } from "../date-time";
 
+import {
+  CalendarViews,
+  type CalendarDisplayView,
+} from "./calendar-views";
+
 type CalendarAction = (
   data: FormData
 ) => Promise<CalendarActionResult>;
@@ -52,7 +62,11 @@ type Props = {
   timezone: CalendarTimezone;
   events: CalendarEventView[];
   limit: number;
+  truncated: boolean;
   schemaPending: boolean;
+  view: CalendarDisplayView;
+  selectedDate: string;
+  today: string;
   actions: {
     create: CalendarAction;
     update: CalendarAction;
@@ -87,15 +101,23 @@ function Row({
   );
 }
 
+function repeatLabel(recurrenceRule: string): string | null {
+  const rule = parseRecurrence(recurrenceRule);
+  if (!rule) return null;
+  if (rule.frequency === "daily") return "Repeats daily";
+  if (rule.frequency === "monthly") return "Repeats monthly";
+  return `Repeats weekly on ${rule.weekdays.map((day) => weekdayNames[day]).join(", ")}`;
+}
+
 function EventFields({
   item,
   timezone,
-  month,
+  defaults,
   occurrenceOnly,
 }: {
   item: CalendarEventView | null;
   timezone: CalendarTimezone;
-  month: string;
+  defaults: { start: string; end: string };
   occurrenceOnly: boolean;
 }) {
   const initialRule = parseRecurrence(item?.recurrenceRule ?? "");
@@ -113,29 +135,19 @@ function EventFields({
       item?.timezone ?? timezone
     );
 
-  const today = formatCalendarLocal(
-    new Date(),
-    timezone
-  ).slice(0, 10);
-
-  const defaultDay =
-    today.slice(0, 7) === month
-      ? today
-      : `${month}-01`;
-
   const initialStart = item
     ? formatCalendarLocal(
         item.startsAt,
         item.timezone
       )
-    : `${defaultDay}T09:00`;
+    : defaults.start;
 
   const initialEnd = item
     ? formatCalendarLocal(
         item.endsAt,
         item.timezone
       )
-    : `${defaultDay}T10:00`;
+    : defaults.end;
 
   const initialEndDay =
     item?.isAllDay
@@ -163,7 +175,7 @@ function EventFields({
           autoComplete="off"
           defaultValue={item?.title ?? ""}
           placeholder="Add title"
-          className="w-full rounded-md bg-transparent px-1 py-2 text-xl font-semibold tracking-tight outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring"
+          className="w-full rounded-md bg-transparent px-2 py-2 text-xl font-semibold tracking-tight outline-none ring-inset placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring"
         />
       </label>
 
@@ -496,13 +508,24 @@ function eventSchedule(
   );
 }
 
+const PREVIEW_KIND_LABEL: { [K in NonNullable<CalendarEventView["kind"]>]?: string } = {
+  block: "Task time block",
+  deadline: "Task deadline",
+  planner: "Planned task",
+  google: "Imported from Google Calendar",
+};
+
 export function EventManager({
   month,
   monthLabel,
   timezone,
   events,
   limit,
+  truncated,
   schemaPending,
+  view,
+  selectedDate,
+  today,
   actions,
 }: Props) {
   const router = useRouter();
@@ -511,6 +534,12 @@ export function EventManager({
     useState<CalendarEventView | "create" | null>(
       null
     );
+
+  const [preview, setPreview] = useState<CalendarEventView | null>(null);
+  const [previewDelete, setPreviewDelete] = useState(false);
+  // Captured when "New event" is clicked so the dialog opens prefilled
+  // with the current hour without reading the clock during render.
+  const [createDefaults, setCreateDefaults] = useState({ start: "", end: "" });
 
   const [pending, startTransition] =
     useTransition();
@@ -527,6 +556,13 @@ export function EventManager({
       ? editor
       : null;
 
+  // The visual grid spans adjacent days; the manager list stays within the month.
+  const { from, to } = calendarMonthRange(month, timezone);
+  const monthEvents = events.filter((event) =>
+    Date.parse(event.startsAt) < to.getTime() &&
+    Date.parse(event.endsAt) > from.getTime()
+  );
+
   function openEditor(
     value: CalendarEventView | "create"
   ) {
@@ -536,6 +572,17 @@ export function EventManager({
     setError("");
     setFeedback("");
     setConfirmDelete(false);
+  }
+
+  function openCreate() {
+    const hour = new Date(
+      Math.floor(Date.now() / 3_600_000) * 3_600_000
+    );
+    setCreateDefaults({
+      start: formatCalendarLocal(hour, timezone),
+      end: formatCalendarLocal(new Date(hour.getTime() + 3_600_000), timezone),
+    });
+    openEditor("create");
   }
 
   function save(data: FormData) {
@@ -586,19 +633,12 @@ export function EventManager({
     });
   }
 
-  function remove() {
-    if (!editing || pending) return;
-
-    const data = new FormData();
-    data.set("eventId", editing.seriesId ?? editing.id);
-    data.set("scope", scope);
-    if (editing.originalStart) data.set("originalStart", editing.originalStart);
+  function submitRemoval(data: FormData) {
+    if (pending) return;
 
     startTransition(async () => {
       try {
-        const result = await actions.remove(
-          data
-        );
+        const result = await actions.remove(data);
 
         if (!result.ok) {
           setError(
@@ -608,6 +648,7 @@ export function EventManager({
         }
 
         setEditor(null);
+        setPreview(null);
         setFeedback(
           "Event deleted successfully."
         );
@@ -620,6 +661,31 @@ export function EventManager({
       }
     });
   }
+
+  function remove() {
+    if (!editing || pending) return;
+
+    const data = new FormData();
+    data.set("eventId", editing.seriesId ?? editing.id);
+    data.set("scope", scope);
+    if (editing.originalStart) data.set("originalStart", editing.originalStart);
+
+    submitRemoval(data);
+  }
+
+  function removePreview() {
+    if (!preview || pending) return;
+
+    const data = new FormData();
+    data.set("eventId", preview.seriesId ?? preview.id);
+    data.set("scope", preview.originalStart ? "occurrence" : "series");
+    if (preview.originalStart) data.set("originalStart", preview.originalStart);
+
+    setPreviewDelete(false);
+    submitRemoval(data);
+  }
+
+  const previewDeletable = preview !== null && (preview.kind === "event" || preview.kind === "block");
 
   return (
     <div className="space-y-7">
@@ -637,7 +703,7 @@ export function EventManager({
 
         <Button
           type="button"
-          onClick={() => openEditor("create")}
+          onClick={openCreate}
           disabled={pending || schemaPending}
         >
           <Plus className="size-4" />
@@ -653,6 +719,109 @@ export function EventManager({
           {feedback}
         </p>
       )}
+
+      <CalendarViews
+        view={view}
+        selectedDate={selectedDate}
+        today={today}
+        timezone={timezone}
+        events={events}
+        truncated={truncated}
+        onSelectEvent={setPreview}
+      />
+
+      {/* EVENT PREVIEW */}
+      {preview && (
+        <WorkspaceDialog
+          open
+          onOpenChange={(open) => { if (!open) setPreview(null); }}
+          title={preview.title}
+          description={preview.kind ? PREVIEW_KIND_LABEL[preview.kind] : undefined}
+        >
+          <div className="space-y-5">
+            <Row icon={Clock3}>
+              <p className="text-sm">{eventSchedule(preview)}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {preview.timezone}
+                {preview.recurrenceRule ? ` · ${repeatLabel(preview.recurrenceRule) ?? ""}` : ""}
+              </p>
+            </Row>
+
+            {preview.location && (
+              <Row icon={MapPin}>
+                <p className="text-sm">{preview.location}</p>
+              </Row>
+            )}
+
+            {preview.description && (
+              <Row icon={AlignLeft}>
+                <p className="whitespace-pre-wrap text-sm text-muted-foreground">{preview.description}</p>
+              </Row>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+              {previewDeletable ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  disabled={pending}
+                  onClick={() => setPreviewDelete(true)}
+                >
+                  <Trash2 className="size-4" />
+                  Delete
+                </Button>
+              ) : (
+                <span />
+              )}
+
+              <div className="flex items-center gap-2">
+                {preview.href && (
+                  <a
+                    href={preview.href}
+                    className="inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {preview.kind === "google" ? "Open in Google Calendar" : "Open in Asteria"}
+                    <ExternalLink className="size-4" aria-hidden="true" />
+                  </a>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={pending}
+                  onClick={() => setPreview(null)}
+                >
+                  Close
+                </Button>
+                {previewDeletable && (
+                  <Button
+                    type="button"
+                    disabled={pending || schemaPending}
+                    onClick={() => {
+                      const target = preview;
+                      setPreview(null);
+                      openEditor(target);
+                    }}
+                  >
+                    <Pencil className="size-4" />
+                    Edit
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </WorkspaceDialog>
+      )}
+
+      <ConfirmDialog
+        open={previewDelete}
+        onOpenChange={setPreviewDelete}
+        title="Delete this event?"
+        description={preview ? `“${preview.title}” will be permanently deleted. This cannot be undone.` : ""}
+        confirmLabel="Delete event"
+        pending={pending}
+        onConfirm={removePreview}
+      />
 
       {/* EVENT EDITOR */}
       {editor && (
@@ -708,7 +877,7 @@ export function EventManager({
                 key={`${editing?.id ?? "create"}:${scope}`}
                 item={editing && scope === "series" ? { ...editing, startsAt: editing.seriesStartsAt ?? editing.startsAt, endsAt: editing.seriesEndsAt ?? editing.endsAt } : editing}
                 timezone={timezone}
-                month={month}
+                defaults={createDefaults}
                 occurrenceOnly={scope === "occurrence" && !!editing?.recurrenceRule}
               />
             </fieldset>
@@ -723,52 +892,20 @@ export function EventManager({
             )}
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-              <div>
-                {editing && !confirmDelete && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="text-muted-foreground hover:text-destructive"
-                    disabled={pending || schemaPending}
-                    onClick={() =>
-                      setConfirmDelete(true)
-                    }
-                  >
-                    <Trash2 className="size-4" />
-                    Delete
-                  </Button>
-                )}
-
-                {editing && confirmDelete && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-destructive">
-                      Delete this event permanently?
-                    </p>
-
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        disabled={pending || schemaPending}
-                        onClick={remove}
-                      >
-                        Yes, delete
-                      </Button>
-
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={pending || schemaPending}
-                        onClick={() =>
-                          setConfirmDelete(false)
-                        }
-                      >
-                        Keep event
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              {editing && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  disabled={pending || schemaPending}
+                  onClick={() =>
+                    setConfirmDelete(true)
+                  }
+                >
+                  <Trash2 className="size-4" />
+                  Delete
+                </Button>
+              )}
 
               <div className="flex gap-2">
                 <Button
@@ -793,6 +930,16 @@ export function EventManager({
         </WorkspaceDialog>
       )}
 
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={(open) => { if (!pending) setConfirmDelete(open); }}
+        title="Delete this event?"
+        description={editing ? `“${editing.title}” will be permanently deleted. This cannot be undone.` : ""}
+        confirmLabel="Delete event"
+        pending={pending}
+        onConfirm={remove}
+      />
+
       {/* EVENT LIST */}
       <section
         aria-label="Calendar events"
@@ -804,15 +951,15 @@ export function EventManager({
           </h2>
 
           <span className="text-xs text-muted-foreground">
-            {events.length}
-            {events.length === limit
+            {monthEvents.length}
+            {monthEvents.length === limit
               ? "+"
               : ""}{" "}
             events · {monthLabel}
           </span>
         </div>
 
-        {events.length === 0 ? (
+        {monthEvents.length === 0 ? (
           <div className="p-10 text-center">
             <CalendarDays className="mx-auto size-9 text-muted-foreground" />
 
@@ -826,7 +973,7 @@ export function EventManager({
           </div>
         ) : (
           <ul className="divide-y">
-            {events.map((item) => (
+            {monthEvents.map((item) => (
               <li
                 key={item.id}
                 className="flex flex-wrap items-start justify-between gap-4 p-4"
@@ -881,7 +1028,7 @@ export function EventManager({
           </ul>
         )}
 
-        {events.length === limit && (
+        {monthEvents.length === limit && (
           <p className="border-t p-4 text-xs text-muted-foreground">
             Showing the first {limit} events.
             Narrow the displayed date range to inspect other events.

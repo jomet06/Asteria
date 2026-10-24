@@ -1,24 +1,18 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  Clock3,
-  MapPin,
-  X,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import type { CalendarEventView } from "../data";
 import {
   formatCalendarLocal,
   isCalendarDay,
   parseCalendarLocal,
-  previousAllDayDate,
   type CalendarTimezone,
 } from "../date-time";
 
@@ -31,6 +25,7 @@ type Props = {
   timezone: CalendarTimezone;
   events: CalendarEventView[];
   truncated: boolean;
+  onSelectEvent?: (event: CalendarEventView) => void;
 };
 
 const DAY_MS = 86_400_000;
@@ -162,7 +157,7 @@ function EventChip({
 }: {
   event: CalendarEventView;
   timezone: CalendarTimezone;
-  onSelect: (id: string) => void;
+  onSelect: (event: CalendarEventView) => void;
   compact?: boolean;
 }) {
   return (
@@ -171,7 +166,7 @@ function EventChip({
       title={event.title}
       data-kind={event.kind}
       aria-label={`View event: ${event.title}`}
-      onClick={() => onSelect(event.id)}
+      onClick={() => onSelect(event)}
       className="block w-full min-w-0 rounded-md border data-[kind=deadline]:border-amber-500 data-[kind=deadline]:bg-amber-500/15 data-[kind=planner]:border-emerald-500 data-[kind=planner]:bg-emerald-500/15 data-[kind=block]:border-violet-500 data-[kind=block]:bg-violet-500/15 data-[kind=google]:border-sky-500 data-[kind=google]:bg-sky-500/15 border-primary/25 bg-primary/10 px-1.5 py-1 text-left text-xs text-foreground outline-none hover:bg-primary/20 focus-visible:ring-2 focus-visible:ring-ring"
     >
       <span className="block truncate font-medium">
@@ -192,7 +187,7 @@ function MonthGrid({
   today: string;
   timezone: CalendarTimezone;
   events: CalendarEventView[];
-  onSelect: (id: string) => void;
+  onSelect: (event: CalendarEventView) => void;
 }) {
   const first = mondayOf(`${month}-01`);
   const days = Array.from({ length: 35 }, (_, i) => addDays(first, i));
@@ -260,7 +255,7 @@ function TimeGrid({
   today: string;
   timezone: CalendarTimezone;
   events: CalendarEventView[];
-  onSelect: (id: string) => void;
+  onSelect: (event: CalendarEventView) => void;
 }) {
   const gridColumns = `64px repeat(${days.length}, minmax(0, 1fr))`;
 
@@ -307,7 +302,7 @@ function TimeGrid({
                   type="button"
                   title={`${event.title} · ${eventLabel(event, timezone)}`}
                   aria-label={`View event: ${event.title}`}
-                  onClick={() => onSelect(event.id)}
+                  onClick={() => onSelect(event)}
                   data-kind={event.kind}
                   className="data-[kind=deadline]:border-amber-500 data-[kind=deadline]:bg-amber-500/20 data-[kind=block]:border-violet-500 data-[kind=block]:bg-violet-500/20 data-[kind=google]:border-sky-500 data-[kind=google]:bg-sky-500/20 absolute z-10 overflow-hidden rounded-md border border-primary/35 bg-primary/15 px-1 py-0.5 text-left text-[11px] leading-tight text-foreground outline-none hover:bg-primary/25 focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-ring"
                   style={{
@@ -336,10 +331,9 @@ export function CalendarViews({
   timezone,
   events,
   truncated,
+  onSelectEvent,
 }: Props) {
   const router = useRouter();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = events.find((event) => event.id === selectedId) ?? null;
   const month = selectedDate.slice(0, 7);
   const weekStart = mondayOf(selectedDate);
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -417,31 +411,9 @@ export function CalendarViews({
       </div>
       {events.length === 0 && <p role="status" className="rounded-lg border p-4 text-sm text-muted-foreground">No events, deadlines or plans in this period.</p>}
       {view === "month" ? (
-        <MonthGrid month={month} today={today} timezone={timezone} events={events} onSelect={setSelectedId} />
+        <MonthGrid month={month} today={today} timezone={timezone} events={events} onSelect={(event) => onSelectEvent?.(event)} />
       ) : (
-        <TimeGrid days={displayedDays} today={today} timezone={timezone} events={events} onSelect={setSelectedId} />
-      )}
-
-      {selected && (
-        <section aria-label="Selected event details" className="space-y-3 rounded-xl border bg-card p-4">
-          <div className="flex items-start justify-between gap-3">
-            <h3 className="text-lg font-semibold">{selected.title}</h3>
-            <Button type="button" variant="ghost" size="icon" onClick={() => setSelectedId(null)} aria-label="Close event details">
-              <X className="size-4" />
-            </Button>
-          </div>
-          <p className="flex items-start gap-2 text-sm text-muted-foreground">
-            <Clock3 className="mt-0.5 size-4 shrink-0" />
-            {selected.isAllDay
-              ? `${formatCalendarLocal(selected.startsAt, selected.timezone).slice(0, 10)} – ${previousAllDayDate(selected.endsAt, selected.timezone)} · All day`
-              : `${formatCalendarLocal(selected.startsAt, timezone).replace("T", " ")} – ${formatCalendarLocal(selected.endsAt, timezone).replace("T", " ")} (${timezone})`}
-          </p>
-          {selected.location && <p className="flex items-center gap-2 text-sm"><MapPin className="size-4" />{selected.location}</p>}
-          {selected.description && <p className="whitespace-pre-wrap text-sm text-muted-foreground">{selected.description}</p>}
-          <a href={selected.href ?? `${calendarHref(view, formatCalendarLocal(selected.startsAt, timezone).slice(0, 10))}#event-manager`} className="inline-block text-sm font-medium text-primary underline-offset-4 hover:underline">
-            {selected.kind === "google" ? "Open in Google Calendar" : selected.href ? "Open original task or planner" : "Manage events (edit or delete)"}
-          </a>
-        </section>
+        <TimeGrid days={displayedDays} today={today} timezone={timezone} events={events} onSelect={(event) => onSelectEvent?.(event)} />
       )}
     </section>
   );
