@@ -142,6 +142,11 @@ model CalendarEvent {
   originalStart  DateTime? @map("original_start") @db.Timestamptz(3)
   isCancelled    Boolean   @default(false) @map("is_cancelled")
 
+  // Two-way sync with the dedicated Asteria calendar in Google.
+  googleEventId String?  @map("google_event_id") @db.VarChar(512)
+  syncState     String   @default("local") @map("sync_state") @db.VarChar(32)
+  syncError     String?  @map("sync_error") @db.Text
+
   task       Task?           @relation(fields: [taskId, ownerId], references: [id, ownerId], onDelete: Cascade, map: "calendar_events_task_owner_fkey")
   parent     CalendarEvent?  @relation("Occurrences", fields: [parentId, ownerId], references: [id, ownerId], onDelete: Cascade, map: "calendar_events_parent_owner_fkey")
   exceptions CalendarEvent[] @relation("Occurrences")
@@ -156,6 +161,7 @@ model CalendarEvent {
   @@index([ownerId, startsAt], map: "calendar_events_owner_starts_idx")
   @@index([taskId, ownerId], map: "calendar_events_task_owner_idx")
   @@index([ownerId, endsAt], map: "calendar_events_owner_ends_idx")
+  @@index([ownerId, syncState], map: "calendar_events_owner_sync_state_idx")
   @@map("calendar_events")
 }
 
@@ -169,6 +175,8 @@ model GoogleCalendarConnection {
   googleEmail           String?  @map("google_email") @db.VarChar(320)
   refreshTokenEncrypted String   @map("refresh_token_encrypted") @db.Text
   grantedScopes         String   @map("granted_scopes") @db.Text
+  // Dedicated secondary calendar ("Asteria") that receives pushed events.
+  targetCalendarId      String?  @map("target_calendar_id") @db.VarChar(512)
   createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 

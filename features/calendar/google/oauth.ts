@@ -49,7 +49,7 @@ export async function exchangeGoogleCode(code: string): Promise<{
   const granted = new Set(tokens.scope.split(/\s+/));
   const required = GOOGLE_CALENDAR_SCOPES.filter((scope) => scope !== "openid" && scope !== "email");
   if (!required.every((scope) => granted.has(scope))) {
-    throw new Error("Required read-only Calendar permissions were not granted.");
+    throw new Error("Required Calendar permissions were not granted.");
   }
   return {
     accessToken: tokens.access_token,

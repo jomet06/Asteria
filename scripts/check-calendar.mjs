@@ -51,6 +51,7 @@ function harness(auth = true) {
       async findMany({ where, take }) { calls.push("tasks"); return tasks.filter((r) => matches(r, where)).slice(0, take); },
     },
     dailyPlanItem: { async findMany({ where, take }) { return plans.filter((r) => matches(r, where)).slice(0, take); } },
+    googleEventMirror: { async findMany() { if (faults.read) throw faults.read; calls.push("mirror"); return []; } },
     async $transaction(fn) { return fn(prisma); },
     async $queryRaw(strings, id, ownerId) { return rows.filter((r) => r.id === id && r.ownerId === ownerId).map(({ id }) => ({ id })); },
   };

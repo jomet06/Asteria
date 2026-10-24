@@ -2,9 +2,23 @@
 export const GOOGLE_CALENDAR_SCOPES = [
   "openid",
   "email",
-  "https://www.googleapis.com/auth/calendar.events.readonly",
+  // Manage events in the dedicated Asteria calendar (two-way sync).
+  "https://www.googleapis.com/auth/calendar.events",
+  // Create the dedicated Asteria calendar once per Google account.
+  "https://www.googleapis.com/auth/calendar.calendars",
   "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
 ] as const;
+
+/** Scope set a connection needs before Asteria pushes events to Google. */
+export const GOOGLE_TWO_WAY_SCOPES = [
+  "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/calendar.calendars",
+] as const;
+
+export function hasGoogleWriteScopes(grantedScopes: string): boolean {
+  const granted = new Set(grantedScopes.split(/\s+/));
+  return GOOGLE_TWO_WAY_SCOPES.every((scope) => granted.has(scope));
+}
 
 export const GOOGLE_OAUTH_COOKIE = "asteria_google_calendar_oauth";
 export const GOOGLE_OAUTH_MAX_AGE_SECONDS = 600;

@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 
 import { getMyAccount } from "@/features/profile/data";
 import { prisma } from "@/lib/prisma";
+import { hasGoogleWriteScopes } from "./config";
 import { getCalendarClient, listGoogleCalendars, listGoogleEvents } from "./calendar-api";
+import { retryPendingPushes } from "./push";
 
 const DAY = 86_400_000;
 const MAX_CALENDARS = 3;
@@ -21,7 +23,10 @@ async function connected() {
 export async function loadGoogleCalendars(): Promise<never> {
   const { user, connection } = await connected();
   const api = await getCalendarClient(connection.refreshTokenEncrypted);
-  const calendars = await listGoogleCalendars(api);
+  // The Asteria calendar receives pushed events; importing it would duplicate them.
+  const calendars = (await listGoogleCalendars(api)).filter(
+    (calendar) => calendar.id !== connection.targetCalendarId
+  );
   await prisma.$transaction(async (tx) => {
     for (const calendar of calendars) {
       await tx.googleCalendarSource.upsert({
@@ -44,7 +49,10 @@ export async function loadGoogleCalendars(): Promise<never> {
 export async function syncGoogleCalendars(formData: FormData): Promise<never> {
   const { user, connection } = await connected();
   const selected = formData.getAll("calendarId").filter((value): value is string => typeof value === "string");
-  const ids = [...new Set(selected)].slice(0, MAX_CALENDARS);
+  // The Asteria calendar mirrors pushed events and is never imported back.
+  const ids = [...new Set(selected)]
+    .filter((id) => id !== connection.targetCalendarId)
+    .slice(0, MAX_CALENDARS);
   if (!ids.length) redirect("/settings?google=no_calendars_selected");
 
   const sources = await prisma.googleCalendarSource.findMany({
@@ -52,13 +60,24 @@ export async function syncGoogleCalendars(formData: FormData): Promise<never> {
   });
   if (sources.length !== ids.length) redirect("/settings?google=invalid_calendars");
 
-  const api = await getCalendarClient(connection.refreshTokenEncrypted);
   const from = new Date(Date.now() - 90 * DAY);
   const to = new Date(Date.now() + 365 * DAY);
-  const snapshots = await Promise.all(sources.map(async (source) => ({
-    source,
-    result: await listGoogleEvents(api, source.googleCalendarId, from, to, MAX_EVENTS),
-  })));
+  let snapshots: { source: (typeof sources)[number]; result: Awaited<ReturnType<typeof listGoogleEvents>> }[];
+  try {
+    const api = await getCalendarClient(connection.refreshTokenEncrypted);
+    snapshots = await Promise.all(sources.map(async (source) => ({
+      source,
+      result: await listGoogleEvents(api, source.googleCalendarId, from, to, MAX_EVENTS),
+    })));
+  } catch {
+    // Preserve existing mirrors and surface the failure on every affected source.
+    await prisma.googleCalendarSource.updateMany({
+      where: { ownerId: user.id, id: { in: sources.map((source) => source.id) } },
+      data: { syncStatus: "error", lastSyncError: "Google Calendar request failed." },
+    });
+    revalidatePath("/settings");
+    redirect("/settings?google=sync_failed");
+  }
 
   if (snapshots.some(({ result }) => result.truncated)) {
     redirect("/settings?google=sync_truncated");
@@ -92,8 +111,23 @@ export async function syncGoogleCalendars(formData: FormData): Promise<never> {
     }
   });
 
+  // A successful import also retries pushes that failed earlier.
+  await retryPendingPushes(user.id);
+
   revalidatePath("/settings");
   revalidatePath("/calendar");
   redirect("/settings?google=synced");
+}
+
+/** Settings form action: push Asteria events that are not yet in Google. */
+export async function syncPendingEventsToGoogle(): Promise<never> {
+  const { user, connection } = await connected();
+  if (!hasGoogleWriteScopes(connection.grantedScopes)) {
+    redirect("/settings?google=push_readonly");
+  }
+  const summary = await retryPendingPushes(user.id);
+  revalidatePath("/settings");
+  revalidatePath("/calendar");
+  redirect(`/settings?google=${summary.failed > 0 ? "push_partial" : "push_done"}`);
 }
 

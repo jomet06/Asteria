@@ -55,7 +55,7 @@ test("Google refresh tokens are authenticated and encrypted", () => {
   }
 });
 
-test("Google OAuth authorization URL uses offline access and read-only scopes", () => {
+test("Google OAuth authorization URL uses offline access and two-way scopes", () => {
   const old = [process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, process.env.GOOGLE_REDIRECT_URI];
   process.env.GOOGLE_CLIENT_ID = "test-client";
   process.env.GOOGLE_CLIENT_SECRET = "test-secret";
@@ -66,8 +66,10 @@ test("Google OAuth authorization URL uses offline access and read-only scopes", 
     assert.equal(url.host, "accounts.google.com");
     assert.equal(url.searchParams.get("access_type"), "offline");
     assert.equal(url.searchParams.get("state"), "test-state");
-    assert.ok(url.searchParams.get("scope").includes("calendar.events.readonly"));
-    assert.ok(!url.searchParams.get("scope").includes("https://www.googleapis.com/auth/calendar.events "));
+    const scopes = url.searchParams.get("scope").split(" ");
+    assert.ok(scopes.includes("https://www.googleapis.com/auth/calendar.events"));
+    assert.ok(scopes.includes("https://www.googleapis.com/auth/calendar.calendars"));
+    assert.ok(!scopes.includes("https://www.googleapis.com/auth/calendar"));
   } finally {
     [process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, process.env.GOOGLE_REDIRECT_URI] = old;
     ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI"].forEach((key, index) => {

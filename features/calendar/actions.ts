@@ -7,6 +7,7 @@ import { readEventFields, readEventId } from "./validation";
 import { expandSeries, overlaps } from "./recurrence";
 import { loadCalendarEvents } from "./data";
 import { readCalendarTimezone } from "./date-time";
+import { deleteEventFromGoogleAfterRemoval, syncEventToGoogle } from "./google/push";
 
 export type CalendarActionResult =
   | { ok: true; code: "created" | "updated" | "deleted" }
@@ -41,8 +42,9 @@ export async function createCalendarEvent(data: FormData): Promise<CalendarActio
   if (fields.taskId && !await prisma.task.findFirst({ where: { id: fields.taskId, ownerId: user.id }, select: { id: true } })) return missing;
   const warning = await conflictWarning(user.id, fields, data);
   if (warning) return warning;
-  await prisma.calendarEvent.create({ data: { ...fields, ownerId: user.id } });
+  const created = await prisma.calendarEvent.create({ data: { ...fields, ownerId: user.id } });
   refreshCalendar();
+  await syncEventToGoogle(user.id, created.id);
   return { ok: true, code: "created" };
 }
 
@@ -80,12 +82,14 @@ async function mutateEvent(data: FormData, remove: boolean): Promise<CalendarAct
     const warning = await conflictWarning(user.id, { ...fields, recurrenceRule: originalStart ? null : fields.recurrenceRule }, data, id, originalStart ?? undefined);
     if (warning) return warning;
   }
+  let pushedGoogleEventId: string | null = null;
   const result = await prisma.$transaction(async (tx) => {
     // Lock the owned series to serialize series edits and occurrence exceptions.
     const locked = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM public.calendar_events WHERE id = ${id}::uuid AND owner_id = ${user.id}::uuid FOR UPDATE`;
     if (!locked.length) return missing;
     const current = await tx.calendarEvent.findFirst({ where: { id, ownerId: user.id, parentId: null } });
     if (!current) return missing;
+    pushedGoogleEventId = current.googleEventId;
     if (originalStart) {
       if (!current.recurrenceRule) return invalid;
       const matches = expandSeries({ ...current, timezone: readCalendarTimezone(current.timezone) }, originalStart, new Date(originalStart.getTime() + 1));
@@ -103,6 +107,11 @@ async function mutateEvent(data: FormData, remove: boolean): Promise<CalendarAct
     }
     return { ok: true, code: remove ? "deleted" : "updated" } as CalendarActionResult;
   });
-  if (result.ok) refreshCalendar();
+  if (result.ok) {
+    refreshCalendar();
+    // Two-way sync never blocks or fails the local result.
+    if (remove) await deleteEventFromGoogleAfterRemoval(user.id, pushedGoogleEventId);
+    else if (!originalStart) await syncEventToGoogle(user.id, id);
+  }
   return result;
 }
