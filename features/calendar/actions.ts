@@ -7,7 +7,7 @@ import { readEventFields, readEventId } from "./validation";
 import { expandSeries, overlaps } from "./recurrence";
 import { loadCalendarEvents } from "./data";
 import { readCalendarTimezone } from "./date-time";
-import { deleteEventFromGoogleAfterRemoval, syncEventToGoogle } from "./google/push";
+import { deleteEventFromGoogleAfterRemoval, reconcileGoogleExceptionsForOwner, syncEventToGoogle } from "./google/push";
 
 export type CalendarActionResult =
   | { ok: true; code: "created" | "updated" | "deleted" }
@@ -109,9 +109,13 @@ async function mutateEvent(data: FormData, remove: boolean): Promise<CalendarAct
   });
   if (result.ok) {
     refreshCalendar();
-    // Two-way sync never blocks or fails the local result.
-    if (remove) await deleteEventFromGoogleAfterRemoval(user.id, pushedGoogleEventId);
-    else if (!originalStart) await syncEventToGoogle(user.id, id);
+    // Two-way sync never blocks or fails the local result. Occurrence
+    // edits and cancellations reconcile Google's instances; series-level
+    // changes push the whole series; series deletion removes it entirely.
+    if (remove && originalStart) await reconcileGoogleExceptionsForOwner(user.id, id);
+    else if (remove) await deleteEventFromGoogleAfterRemoval(user.id, pushedGoogleEventId);
+    else if (originalStart) await reconcileGoogleExceptionsForOwner(user.id, id);
+    else await syncEventToGoogle(user.id, id);
   }
   return result;
 }

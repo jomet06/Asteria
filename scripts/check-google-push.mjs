@@ -61,8 +61,8 @@ function fakePrisma({ connection = null, event = null, events = [] } = {}) {
   return { prisma, calls };
 }
 
-function fakeApi({ calendarItems = [], insertedCalendarId = "cal_asteria", insertResults = [], updateResults = [] } = {}) {
-  const calls = { calendarInserts: [], eventInserts: [], eventUpdates: [] };
+function fakeApi({ calendarItems = [], insertedCalendarId = "cal_asteria", insertResults = [], updateResults = [], instances = [] } = {}) {
+  const calls = { calendarInserts: [], eventInserts: [], eventUpdates: [], eventDeletes: [], eventPatches: [] };
   let insertSeq = 0;
   let updateSeq = 0;
   const api = {
@@ -85,6 +85,15 @@ function fakeApi({ calendarItems = [], insertedCalendarId = "cal_asteria", inser
         const result = updateResults[updateSeq++];
         if (result instanceof Error) throw result;
         return result ?? { data: { id: `geu_${updateSeq}` } };
+      },
+      delete: async ({ eventId }) => {
+        calls.eventDeletes.push(eventId);
+        return { data: {} };
+      },
+      instances: async () => ({ data: { items: instances } }),
+      patch: async ({ eventId, requestBody }) => {
+        calls.eventPatches.push({ eventId, requestBody });
+        return { data: { id: eventId } };
       },
     },
   };
@@ -189,20 +198,18 @@ test("Google failures mark the event failed with a generic message", async () =>
   assert.doesNotMatch(calls.eventUpdates[0].data.syncError, /response body/i);
 });
 
-test("recurring series and occurrence exceptions never reach Google", async () => {
-  for (const event of [baseEvent({ recurrenceRule: '{"frequency":"weekly"}' }), baseEvent({ parentId: "parent" })]) {
-    const { prisma, calls } = fakePrisma({
-      connection: { ownerId: "u1", refreshTokenEncrypted: "enc", grantedScopes: WRITE_SCOPES, targetCalendarId: "cal_asteria" },
-      event,
-    });
-    const { api, calls: apiCalls } = fakeApi();
-    const push = pushModule({ "@/lib/prisma": { prisma }, "./calendar-api": { getCalendarClient: async () => api } });
+test("occurrence exceptions never reach Google directly", async () => {
+  const { prisma, calls } = fakePrisma({
+    connection: { ownerId: "u1", refreshTokenEncrypted: "enc", grantedScopes: WRITE_SCOPES, targetCalendarId: "cal_asteria" },
+    event: baseEvent({ parentId: "parent" }),
+  });
+  const { api, calls: apiCalls } = fakeApi();
+  const push = pushModule({ "@/lib/prisma": { prisma }, "./calendar-api": { getCalendarClient: async () => api } });
 
-    await push.syncEventToGoogle("u1", "e1");
+  await push.syncEventToGoogle("u1", "e1");
 
-    assert.equal(calls.eventUpdates.length, 0);
-    assert.equal(apiCalls.eventInserts.length, 0);
-  }
+  assert.equal(calls.eventUpdates.length, 0);
+  assert.equal(apiCalls.eventInserts.length, 0);
 });
 
 test("retry pushes unsynced non-recurring events and reports counts", async () => {
@@ -233,4 +240,89 @@ test("retry is skipped for read-only connections", async () => {
   assert.equal(summary.skipped, true);
   assert.equal(calls.eventUpdates.length, 0);
   assert.equal(apiCalls.eventInserts.length, 0);
+});
+
+test("recurring series are replaced wholesale and exceptions reconcile", async () => {
+  // Anchor: Sat Oct 24 00:00 WIB → BYDAY gains SA next to the selected MO,WE.
+  const series = baseEvent({
+    id: "series1",
+    recurrenceRule: '{"frequency":"weekly","weekdays":[1,3]}',
+    googleEventId: "old-master",
+  });
+  const exceptions = [
+    {
+      id: "ex-edited",
+      ownerId: "u1",
+      parentId: "series1",
+      title: "Moved occurrence",
+      description: null,
+      location: null,
+      startsAt: new Date("2026-10-26T02:00:00.000Z"),
+      endsAt: new Date("2026-10-26T03:00:00.000Z"),
+      timezone: "Asia/Jakarta",
+      isAllDay: false,
+      isCancelled: false,
+      originalStart: new Date("2026-10-26T01:00:00.000Z"),
+    },
+    {
+      id: "ex-cancelled",
+      ownerId: "u1",
+      parentId: "series1",
+      title: "Dropped occurrence",
+      description: null,
+      location: null,
+      startsAt: new Date("2026-10-28T01:00:00.000Z"),
+      endsAt: new Date("2026-10-28T02:00:00.000Z"),
+      timezone: "Asia/Jakarta",
+      isAllDay: false,
+      isCancelled: true,
+      originalStart: new Date("2026-10-28T01:00:00.000Z"),
+    },
+  ];
+  const { prisma, calls } = fakePrisma({
+    connection: { ownerId: "u1", refreshTokenEncrypted: "enc", grantedScopes: WRITE_SCOPES, targetCalendarId: "cal_asteria" },
+    event: series,
+    events: exceptions,
+  });
+  const { api, calls: apiCalls } = fakeApi({
+    instances: [
+      { id: "inst-edited", originalStartTime: { dateTime: "2026-10-26T01:00:00.000Z" }, status: "confirmed" },
+      { id: "inst-cancelled", originalStartTime: { dateTime: "2026-10-28T01:00:00.000Z" }, status: "confirmed" },
+    ],
+  });
+  const push = pushModule({ "@/lib/prisma": { prisma }, "./calendar-api": { getCalendarClient: async () => api } });
+
+  await push.syncEventToGoogle("u1", "series1");
+
+  // The old master is removed and a fresh RRULE series is inserted.
+  assert.deepEqual(apiCalls.eventDeletes, ["old-master"]);
+  assert.equal(apiCalls.eventInserts[0].recurrence[0], "RRULE:FREQ=WEEKLY;BYDAY=MO,WE,SA");
+  assert.deepEqual(calls.eventUpdates[0].data, { googleEventId: "ge_1", syncState: "synced", syncError: null });
+
+  // Edited instance becomes a Google override; cancelled one is cancelled.
+  assert.equal(apiCalls.eventPatches.length, 2);
+  const edited = apiCalls.eventPatches.find((patch) => patch.eventId === "inst-edited");
+  const cancelled = apiCalls.eventPatches.find((patch) => patch.eventId === "inst-cancelled");
+  assert.equal(edited.requestBody.summary, "Moved occurrence");
+  assert.equal(edited.requestBody.status, "confirmed");
+  assert.equal(cancelled.requestBody.status, "cancelled");
+});
+
+test("retry pushes recurring series and reconciles their exceptions", async () => {
+  const series = baseEvent({
+    id: "series2",
+    recurrenceRule: '{"frequency":"daily","weekdays":[]}',
+    syncState: "local",
+  });
+  const { prisma, calls } = fakePrisma({
+    connection: { ownerId: "u1", refreshTokenEncrypted: "enc", grantedScopes: WRITE_SCOPES, targetCalendarId: "cal_asteria" },
+    events: [series],
+  });
+  const { api } = fakeApi();
+  const push = pushModule({ "@/lib/prisma": { prisma }, "./calendar-api": { getCalendarClient: async () => api } });
+
+  const summary = await push.retryPendingPushes("u1");
+
+  assert.deepEqual(summary, { attempted: 1, pushed: 1, failed: 0, skipped: false });
+  assert.equal(calls.eventUpdates[0].data.syncState, "synced");
 });

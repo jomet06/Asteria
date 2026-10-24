@@ -66,3 +66,48 @@ export function expandSeries(series: Series, from: Date, to: Date, limit = 501):
 export function overlaps(a: { startsAt: Date; endsAt: Date }, b: { startsAt: Date; endsAt: Date }) {
   return a.startsAt < b.endsAt && a.endsAt > b.startsAt;
 }
+
+// RFC 5545 weekday codes indexed by Date#getUTCDay().
+const RRULE_WEEKDAYS = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"] as const;
+
+function compactInstant(instant: Date): string {
+  return instant.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+}
+
+/**
+ * Translate Asteria's recurrence JSON into an RFC 5545 RRULE for Google.
+ * The anchor (first) instance always occurs in Asteria's expansion even when
+ * its weekday is not selected, so the anchor weekday is added to BYDAY.
+ */
+export function toRecurrenceRule(
+  recurrenceRule: string | null | undefined,
+  series: { startsAt: Date; timezone: CalendarTimezone; isAllDay: boolean }
+): string | null {
+  const rule = parseRecurrence(recurrenceRule ?? "");
+  if (!rule) return null;
+
+  const parts: string[] = [`FREQ=${rule.frequency.toUpperCase()}`];
+
+  if (rule.frequency === "weekly") {
+    const local = formatCalendarLocal(series.startsAt, series.timezone);
+    const anchorWeekday = new Date(Date.parse(`${local.slice(0, 10)}T00:00:00Z`)).getUTCDay();
+    const days = [...new Set([...rule.weekdays, anchorWeekday])]
+      .sort((a, b) => a - b)
+      .map((day) => RRULE_WEEKDAYS[day]);
+    parts.push(`BYDAY=${days.join(",")}`);
+  }
+
+  if (rule.until) {
+    // Asteria's until is an inclusive calendar day. All-day series use the
+    // RFC date form; timed series use the last local minute of that day.
+    parts.push(
+      series.isAllDay
+        ? `UNTIL=${rule.until.replace(/-/g, "")}`
+        : `UNTIL=${compactInstant(parseCalendarLocal(`${rule.until}T23:59`, series.timezone)!)}`
+    );
+  } else if (rule.count) {
+    parts.push(`COUNT=${rule.count}`);
+  }
+
+  return `RRULE:${parts.join(";")}`;
+}

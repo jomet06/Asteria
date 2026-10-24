@@ -43,11 +43,38 @@ The target calendar is excluded from import (`loadGoogleCalendars` and
 - `createCalendarEvent` → local row committed → `syncEventToGoogle`.
 - `mutateEvent` (series update / series delete) → same, with the pre-delete
   `googleEventId` captured inside the transaction for `deleteEventFromGoogleAfterRemoval`.
+- `mutateEvent` (occurrence edit / cancel) → `reconcileGoogleExceptionsForOwner`
+  re-applies the series' exceptions to Google's instances.
 
 `syncEventToGoogle` re-reads the row and skips: missing connection, read-only
-scopes, occurrence exceptions (`parentId` set), and recurring series
-(`recurrenceRule` set). Google failures are recorded on the row
+scopes, and occurrence exceptions (`parentId` set — they ride along with their
+series). Google failures are recorded on the row
 (`syncState: "failed"`, generic `syncError`) and never fail the local action.
+
+### Recurring series
+
+Asteria's recurrence JSON is translated to RFC 5545 by `toRecurrenceRule`
+(`features/calendar/recurrence.ts`): daily/weekly/monthly map to FREQ, weekly
+emits `BYDAY` including the anchor weekday (Asteria's expansion always includes
+the first instance), `until` becomes an inclusive `UNTIL` (date form for
+all-day series, last local minute for timed ones), and `count` becomes `COUNT`.
+
+Because Google keeps per-instance overrides when a recurring master is updated,
+series updates use **delete + insert**: the old master is removed, a fresh one
+is inserted, and the local exceptions are then reconciled against the fresh
+instance list. The Google event id therefore changes on every series edit —
+Asteria always stores the current id in `googleEventId`.
+
+### Occurrence exceptions
+
+After every series push (and after every occurrence edit/cancel), Asteria lists
+the Google series' instances (`events.instances`, `showDeleted: true`, capped at
+1000) and matches them to local exception rows by `originalStart`:
+
+- edited exception → `events.patch` on the instance (fields + `status: confirmed`)
+- cancelled exception → `events.patch` with `status: "cancelled"`
+
+Per-instance failures are skipped; the series itself remains `synced`.
 
 Push bodies carry `extendedProperties.private.asteriaEventId` for traceability.
 All-day events use Google's exclusive `date` endpoints, matching Asteria's
@@ -63,15 +90,13 @@ two-way sync was enabled. `getMyGooglePushBacklog` drives the Settings counter.
 
 ## Known limitations
 
-- **Recurring events stay local.** Asteria's JSON recurrence grammar is not yet
-  translated to Google RRULE, and occurrence exceptions have no Google
-  counterpart; pushing them is deferred.
-- **Occurrence cancellations don't propagate.** Because recurring series are not
-  pushed, exceptions/cancellations never reach Google.
+- **Google-side instance edits are not imported.** Mirrors stay read-only
+  snapshots; an instance edited in Google is overwritten on the next series
+  reconcile.
+- **Reconciliation is best effort.** An instance patch that fails is skipped;
+  the series stays `synced` and the divergence is not surfaced as an error row.
 - **Delete failures orphan.** If a Google delete fails after a local delete
   succeeded, the Google copy stays until manually removed.
-- **Series edited into recurring** keep their old Google single event; the new
-  local series is not pushed.
 - **No incremental sync.** Import remains a bounded full-window replace
   (−90 … +365 days, ≤3 calendars, ≤2500 events each); `syncToken` sync is future work.
 
