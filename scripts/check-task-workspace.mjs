@@ -135,6 +135,11 @@ function harness({ authenticated = true } = {}) {
       data: { user: authenticated ? { id: owner, user_metadata: {} } : null }, error: null,
     }) } }) },
     "@/app/auth/actions": { signOut: async () => {} },
+    // AppShell is an async server component (it awaits the account read);
+    // the workspace tests render synchronously, so pass the tree through.
+    "@/components/app-shell": {
+      AppShell: ({ children }) => React.createElement("div", null, children),
+    },
     "next/cache": { revalidatePath: (url) => refreshed.push(url) },
     "next/server": { connection: async () => {} },
     "next/navigation": {
@@ -337,7 +342,7 @@ test("quick add defaults the project and task details retain only the current ar
   const { QuickAddTask } = h.load("features/tasks/components/quick-add-task.tsx");
   const { TaskDetail } = h.load("features/tasks/task-form.tsx");
   const projects = h.projects.filter((project) => project.ownerId === owner);
-  const shared = { projects, actions: {}, onResult: () => {}, view: activeId };
+  const shared = { projects, tasks: [], actions: {}, onResult: () => {}, view: activeId };
   const createMarkup = renderToStaticMarkup(React.createElement(QuickAddTask, shared));
   assert.match(createMarkup, new RegExp(`<option value="${activeId}" selected=""`));
   assert.doesNotMatch(createMarkup, new RegExp(archivedId));
@@ -373,7 +378,8 @@ test("workspace page renders one navigation feature and only owned tasks/project
   checkKeys(page);
   const markup = renderToStaticMarkup(page);
   assert.match(markup, /To-Do List/);
-  assert.match(markup, /Archived Projects/);
+  // The compact sidebar collapses the archived section behind an "Archived" toggle.
+  assert.match(markup, />Archived<\/span>/);
   assert.doesNotMatch(markup, /href="\/projects"/);
   assert.doesNotMatch(markup, /Private task|>Private</);
   assert.match(markup, /aria-label="Complete task: Existing"/);
@@ -386,7 +392,9 @@ test("page defaults new tasks to a selected project and supports project managem
   const h = harness();
   const page = await h.load("app/tasks/page.tsx").default({ searchParams: Promise.resolve({ view: activeId }) });
   const markup = renderToStaticMarkup(page);
-  assert.match(markup, new RegExp(`<option value="${activeId}" selected=""`));
+  // Quick add now lives inside a dialog that stays closed during SSR; its
+  // project default is covered by the dedicated QuickAddTask component test.
+  assert.doesNotMatch(markup, /aria-label="Quick add task"/);
   assert.match(markup, /aria-label="Actions for Active"/);
   assert.match(markup, /aria-label="New project"/);
   assert.match(markup, /A fresh start for this project/);
@@ -399,10 +407,12 @@ test("archived project page exposes its menu and existing tasks while hiding tas
   const page = await h.load("app/tasks/page.tsx").default({ searchParams: Promise.resolve({ view: archivedId }) });
   const markup = renderToStaticMarkup(page);
   assert.match(markup, /aria-label="Actions for Archived"/);
+  assert.match(markup, /Archived project\./);
   assert.match(markup, /Restore it from the project menu/);
   assert.match(markup, /aria-label="Open task: Existing"/);
   assert.match(markup, /aria-label="Complete task: Existing"/);
-  assert.match(markup, /<div hidden="" class="mb-7"><form aria-label="Quick add task"/);
+  // Archived views hide every task-creation affordance.
+  assert.doesNotMatch(markup, />New task</);
 });
 
 test("page handles empty Inbox, no projects, and an inaccessible project without disclosure", async () => {
@@ -411,7 +421,7 @@ test("page handles empty Inbox, no projects, and an inaccessible project without
     h.projects.splice(0);
     const page = await h.load("app/tasks/page.tsx").default({ searchParams: Promise.resolve({ view }) });
     const markup = renderToStaticMarkup(page);
-    assert.match(markup, /Keep tasks together with a project, or start in Inbox/);
+    assert.match(markup, /No projects yet/);
     assert.match(markup, view === "inbox" ? /Your Inbox is empty/ : /Project not found or access denied/);
     assert.doesNotMatch(markup, /Private task|>Private</);
   }
@@ -436,6 +446,11 @@ test("workspace sends only task and project presentation fields to the client", 
       "status",
       "priority",
       "dueAt",
+      "difficulty",
+      "estimatedMinutes",
+      "progress",
+      "dependsOnTaskId",
+      "dependsOnTitle",
       "subtasks",
     ].sort()
   );
