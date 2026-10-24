@@ -26,6 +26,12 @@ export async function getMyTaskWorkspace() {
             { id: "asc" },
           ],
         },
+
+        dependsOn: {
+          select: {
+            title: true,
+          },
+        },
       },
 
       orderBy: [

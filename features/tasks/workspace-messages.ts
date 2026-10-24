@@ -5,6 +5,7 @@ export const feedbackMessages: Record<string, string> = {
   project_restored: "Project restored.", project_deleted: "Project deleted. Its tasks are now in Inbox.",
   invalid_input: "Check the task title, date, and other fields, then try again.",
   invalid_project: "That project is unavailable or archived. Choose an active project or Inbox.",
+  invalid_dependency: "That dependency is unavailable, or it would create a loop between tasks.",
   not_found: "This task is no longer available. Refresh the page to see the latest tasks.",
   project_invalid_input: "Enter a project name of up to 120 characters and a description of up to 1,000 characters.",
   project_not_found: "This project is no longer available. Refresh the page to see the latest projects.",

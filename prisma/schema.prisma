@@ -62,11 +62,20 @@ model Task {
   status      TaskStatus   @default(TODO)
   priority    TaskPriority @default(MEDIUM)
   dueAt       DateTime?    @map("due_at") @db.Timestamptz(3)
-  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  // AI Daily Planning inputs (PRD 4.4).
+  difficulty       TaskDifficulty @default(NORMAL)
+  estimatedMinutes Int?           @map("estimated_minutes")
+  progress         Int            @default(0)
+  dependsOnTaskId  String?        @map("depends_on_task_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   owner   Profile  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  dependsOn Task?  @relation("TaskDependency", fields: [dependsOnTaskId], references: [id], onDelete: SetNull)
+  blocking  Task[] @relation("TaskDependency")
 
   subtasks       Subtask[]
   dailyPlanItems DailyPlanItem[]
@@ -76,6 +85,8 @@ model Task {
   @@index([ownerId, status], map: "tasks_owner_status_idx")
   @@index([ownerId, dueAt], map: "tasks_owner_due_at_idx")
   @@index([projectId], map: "tasks_project_idx")
+  @@index([ownerId, difficulty], map: "tasks_owner_difficulty_idx")
+  @@index([dependsOnTaskId], map: "tasks_depends_on_idx")
   @@map("tasks")
 }
 
@@ -255,4 +266,14 @@ enum TaskPriority {
   MEDIUM
   HIGH
   URGENT
+}
+
+// ========================================
+// TASK DIFFICULTY
+// ========================================
+
+enum TaskDifficulty {
+  EASY
+  NORMAL
+  HARD
 }

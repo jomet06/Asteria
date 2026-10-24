@@ -20,6 +20,13 @@ export type WorkspaceTask = {
 
   dueAt: string | null;
 
+  // AI Daily Planning inputs.
+  difficulty: "EASY" | "NORMAL" | "HARD";
+  estimatedMinutes: number | null;
+  progress: number;
+  dependsOnTaskId: string | null;
+  dependsOnTitle: string | null;
+
   // Optional temporarily for existing regression fixtures.
   subtasks?: WorkspaceSubtask[];
 };

@@ -83,6 +83,12 @@ export default async function TasksPage({
           dueAt:
             task.dueAt?.toISOString() ?? null,
 
+          difficulty: task.difficulty,
+          estimatedMinutes: task.estimatedMinutes,
+          progress: task.progress,
+          dependsOnTaskId: task.dependsOnTaskId,
+          dependsOnTitle: task.dependsOn?.title ?? null,
+
           subtasks: task.subtasks.map(
             (subtask) => ({
               id: subtask.id,

@@ -801,6 +801,7 @@ export function TaskWorkspace({
           <TaskDetail
             key={selectedTask.id}
             task={selectedTask}
+            tasks={tasks}
             projects={projects}
             view={view}
             today={localToday}

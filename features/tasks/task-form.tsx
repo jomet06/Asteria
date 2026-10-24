@@ -33,6 +33,7 @@ import type {
 
 type TaskDetailProps = {
   task: WorkspaceTask;
+  tasks: WorkspaceTask[];
   projects: WorkspaceProject[];
   view: string;
   actions: WorkspaceActions;
@@ -55,11 +56,17 @@ function initialFields(task: WorkspaceTask) {
     status: task.status,
     priority: task.priority,
     dueDate: task.dueAt?.slice(0, 10) ?? "",
+    // Defaults keep older fixtures that predate these fields rendering.
+    difficulty: task.difficulty ?? "NORMAL",
+    estimatedMinutes: task.estimatedMinutes?.toString() ?? "",
+    progress: (task.progress ?? 0).toString(),
+    dependsOnTaskId: task.dependsOnTaskId ?? "",
   };
 }
 
 export function TaskDetail({
   task,
+  tasks,
   projects,
   view,
   actions,
@@ -265,6 +272,10 @@ export function TaskDetail({
                   setDraft({
                     ...draft,
                     status: event.target.value as WorkspaceTask["status"],
+                    // Completed tasks are always 100% done.
+                    ...(event.target.value === "DONE"
+                      ? { progress: "100" }
+                      : {}),
                   })
                 }
                 className={fieldClass}
@@ -366,6 +377,131 @@ export function TaskDetail({
                       {project.isArchived
                         ? " (Archived)"
                         : ""}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            {/* AI DAILY PLANNING INPUTS */}
+            <div>
+              <label
+                htmlFor={`${prefix}-difficulty`}
+                className="mb-2 block text-sm font-medium"
+              >
+                Difficulty
+              </label>
+
+              <select
+                id={`${prefix}-difficulty`}
+                name="difficulty"
+                value={draft.difficulty}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    difficulty: event.target.value as WorkspaceTask["difficulty"],
+                  })
+                }
+                className={fieldClass}
+              >
+                <option value="EASY">Easy</option>
+                <option value="NORMAL">Normal</option>
+                <option value="HARD">Hard</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor={`${prefix}-estimate`}
+                className="mb-2 block text-sm font-medium"
+              >
+                Estimate
+                <span className="ml-1 font-normal text-muted-foreground">
+                  (minutes, optional)
+                </span>
+              </label>
+
+              <input
+                id={`${prefix}-estimate`}
+                name="estimatedMinutes"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={1440}
+                step={5}
+                value={draft.estimatedMinutes}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    estimatedMinutes: event.target.value,
+                  })
+                }
+                placeholder="45"
+                className={fieldClass}
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor={`${prefix}-progress`}
+                className="mb-2 block text-sm font-medium"
+              >
+                Progress (%)
+              </label>
+
+              <input
+                id={`${prefix}-progress`}
+                name="progress"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={100}
+                value={draft.progress}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    progress: event.target.value,
+                  })
+                }
+                disabled={draft.status === "DONE"}
+                className={fieldClass}
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor={`${prefix}-depends-on`}
+                className="mb-2 block text-sm font-medium"
+              >
+                Depends on
+                <span className="ml-1 font-normal text-muted-foreground">
+                  (optional)
+                </span>
+              </label>
+
+              <select
+                id={`${prefix}-depends-on`}
+                name="dependsOnTaskId"
+                value={draft.dependsOnTaskId}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    dependsOnTaskId: event.target.value,
+                  })
+                }
+                className={fieldClass}
+              >
+                <option value="">Nothing</option>
+
+                {tasks
+                  .filter((item) => item.id !== task.id)
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.title}
+                      {item.status === "DONE"
+                        ? " (completed)"
+                        : item.status === "CANCELLED"
+                          ? " (cancelled)"
+                          : ""}
                     </option>
                   ))}
               </select>

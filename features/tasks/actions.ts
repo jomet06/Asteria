@@ -2,34 +2,11 @@
 "use server";
 
 import { refreshWorkspace, workspaceFeedback } from "./action-feedback";
+import { readTaskFields, dependencyChainHasCycle } from "./task-fields";
 import { uuidPattern } from "./workspace-view";
 
 import { getMyAccount } from "@/features/profile/data";
 import { prisma } from "@/lib/prisma";
-
-const statuses = [
-  "TODO",
-  "IN_PROGRESS",
-  "DONE",
-  "CANCELLED",
-] as const;
-
-const priorities = [
-  "LOW",
-  "MEDIUM",
-  "HIGH",
-  "URGENT",
-] as const;
-
-function isOneOf<T extends string>(
-  value: unknown,
-  allowed: readonly T[]
-): value is T {
-  return (
-    typeof value === "string" &&
-    allowed.some((item) => item === value)
-  );
-}
 
 function readTaskId(formData: FormData) {
   const value = formData.get("taskId");
@@ -38,76 +15,6 @@ function readTaskId(formData: FormData) {
     uuidPattern.test(value)
     ? value
     : null;
-}
-
-function readTaskFields(formData: FormData) {
-  const titleValue = formData.get("title");
-  const descriptionValue = formData.get("description");
-  const projectValue = formData.get("projectId");
-  const statusValue = formData.get("status");
-  const priorityValue = formData.get("priority");
-  const dueDateValue = formData.get("dueDate");
-
-  if (
-    typeof titleValue !== "string" ||
-    typeof descriptionValue !== "string" ||
-    typeof projectValue !== "string" ||
-    typeof dueDateValue !== "string" ||
-    !isOneOf(statusValue, statuses) ||
-    !isOneOf(priorityValue, priorities)
-  ) {
-    return null;
-  }
-
-  const title = titleValue.trim();
-  const description = descriptionValue.trim();
-
-  if (
-    title.length < 1 ||
-    title.length > 200 ||
-    description.length > 2000
-  ) {
-    return null;
-  }
-
-  if (
-    projectValue !== "" &&
-    !uuidPattern.test(projectValue)
-  ) {
-    return null;
-  }
-
-  // Accept only YYYY-MM-DD, or an empty date.
-  if (
-    dueDateValue !== "" &&
-    !/^\d{4}-\d{2}-\d{2}$/.test(dueDateValue)
-  ) {
-    return null;
-  }
-
-  const dueAt = dueDateValue
-    ? new Date(`${dueDateValue}T00:00:00.000Z`)
-    : null;
-
-  // Reject invalid dates like 2026-02-31.
-  if (
-    dueAt &&
-    (
-      Number.isNaN(dueAt.getTime()) ||
-      dueAt.toISOString().slice(0, 10) !== dueDateValue
-    )
-  ) {
-    return null;
-  }
-
-  return {
-    title,
-    description: description || null,
-    projectId: projectValue || null,
-    status: statusValue,
-    priority: priorityValue,
-    dueAt,
-  };
 }
 
 async function ownsProject(
@@ -134,6 +41,44 @@ async function ownsProject(
   return project !== null;
 }
 
+async function dependencyAllowed(
+  formData: FormData,
+  userId: string,
+  taskId: string | null,
+  dependsOnTaskId: string | null
+) {
+  if (!dependsOnTaskId) {
+    return true;
+  }
+
+  if (dependsOnTaskId === taskId) {
+    return false;
+  }
+
+  const dependency = await prisma.task.findFirst({
+    where: { id: dependsOnTaskId, ownerId: userId },
+    select: { dependsOnTaskId: true },
+  });
+
+  if (!dependency) {
+    return false;
+  }
+
+  // A brand-new task cannot appear in an existing chain yet,
+  // so the cycle walk only matters for updates.
+  if (taskId && await dependencyChainHasCycle(taskId, dependsOnTaskId, async (id) => {
+    const row = await prisma.task.findFirst({
+      where: { id, ownerId: userId },
+      select: { dependsOnTaskId: true },
+    });
+    return row?.dependsOnTaskId ?? null;
+  })) {
+    return false;
+  }
+
+  return true;
+}
+
 // =======================================
 // CREATE
 // =======================================
@@ -148,6 +93,10 @@ export async function createTask(formData: FormData) {
 
   if (!(await ownsProject(user.id, fields.projectId))) {
     return workspaceFeedback(formData, "error", "invalid_project");
+  }
+
+  if (!(await dependencyAllowed(formData, user.id, null, fields.dependsOnTaskId))) {
+    return workspaceFeedback(formData, "error", "invalid_dependency");
   }
 
   await prisma.task.create({
@@ -185,6 +134,10 @@ export async function updateTask(formData: FormData) {
 
   if (!(await ownsProject(user.id, fields.projectId, task.projectId))) {
     return workspaceFeedback(formData, "error", "invalid_project");
+  }
+
+  if (!(await dependencyAllowed(formData, user.id, taskId, fields.dependsOnTaskId))) {
+    return workspaceFeedback(formData, "error", "invalid_dependency");
   }
 
   const result = await prisma.task.updateMany({
@@ -228,6 +181,8 @@ export async function toggleTaskStatus(
     },
     data: {
       status: nextStatus,
+      // Completing a task completes its progress; reopening leaves it alone.
+      ...(nextStatus === "DONE" ? { progress: 100 } : {}),
     },
   });
 
