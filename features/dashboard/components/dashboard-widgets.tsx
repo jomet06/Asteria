@@ -18,6 +18,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { formatCalendarLocal, readCalendarTimezone } from "@/features/calendar/date-time";
+import { GeneratePlanButton } from "@/features/hermes/components/generate-plan-button";
 import type {
   DashboardEvent,
   DashboardOverview,
@@ -178,7 +179,7 @@ export function DailyPlanCard({ overview }: { overview: DashboardOverview }) {
         </div>
         <CardTitle>Daily Plan</CardTitle>
         <CardDescription>
-          Your plan for today. Hermes AI will generate it automatically in a future update.
+          Your plan for today. Generate it with Hermes AI or arrange it manually.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -201,12 +202,15 @@ export function DailyPlanCard({ overview }: { overview: DashboardOverview }) {
         ) : (
           <p className="text-sm text-muted-foreground">Nothing is planned for today yet.</p>
         )}
-        <Link
-          href={`/tasks/planner?date=${overview.today}`}
-          className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
-        >
-          Plan your day <ArrowRight className="size-4" />
-        </Link>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <Link
+            href={`/tasks/planner?date=${overview.today}`}
+            className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+          >
+            Plan your day <ArrowRight className="size-4" />
+          </Link>
+          <GeneratePlanButton date={overview.today} />
+        </div>
       </CardContent>
     </Card>
   );

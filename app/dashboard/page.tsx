@@ -157,6 +157,10 @@ export default async function DashboardPage() {
                     <Link href="/tasks" className="inline-flex items-center gap-2 rounded-md text-sm font-medium text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
                       Open To-Do List <ArrowRight className="size-4" />
                     </Link>
+                  ) : module.id === "hermes" ? (
+                    <Link href="/hermes" className="inline-flex items-center gap-2 rounded-md text-sm font-medium text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+                      Open Hermes <ArrowRight className="size-4" />
+                    </Link>
                   ) : (
                     <span className="text-xs font-medium text-muted-foreground">Coming Soon</span>
                   )}

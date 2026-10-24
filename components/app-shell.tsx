@@ -6,7 +6,7 @@ import { getMyAccount } from "@/features/profile/data";
 type AppShellProps = {
   children: ReactNode;
   workspace?: boolean;
-  activePage: "dashboard" | "tasks" | "calendar" | "settings";
+  activePage: "dashboard" | "tasks" | "calendar" | "hermes" | "settings";
 };
 
 export async function AppShell({

@@ -6,6 +6,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import {
   Bell,
+  Bot,
   CalendarDays,
   LayoutDashboard,
   ListTodo,
@@ -18,7 +19,7 @@ import { signOut } from "@/app/auth/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
-type PageId = "dashboard" | "tasks" | "calendar" | "settings";
+type PageId = "dashboard" | "tasks" | "calendar" | "hermes" | "settings";
 
 type AppSidebarProps = {
   children: ReactNode;
@@ -32,6 +33,7 @@ const navigation = [
   { id: "dashboard", href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "tasks", href: "/tasks", label: "To-Do List", icon: ListTodo },
   { id: "calendar", href: "/calendar", label: "Calendar", icon: CalendarDays },
+  { id: "hermes", href: "/hermes", label: "Hermes AI", icon: Bot },
   { id: "settings", href: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
