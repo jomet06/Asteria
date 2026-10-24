@@ -4,7 +4,6 @@ import {
   ArrowRight,
   Bot,
   CalendarDays,
-  Clock3,
   ListTodo,
 } from "lucide-react";
 
@@ -19,6 +18,15 @@ import {
 } from "@/components/ui/card";
 
 import { getMyAccount } from "@/features/profile/data";
+import { getMyDashboardOverview } from "@/features/dashboard/data";
+import {
+  DailyPlanCard,
+  DeadlinesCard,
+  NowNextCard,
+  RemindersCard,
+  ScheduleCard,
+  TodaysTasksCard,
+} from "@/features/dashboard/components/dashboard-widgets";
 
 export const instant = false;
 
@@ -48,6 +56,7 @@ const modules = [
 
 export default async function DashboardPage() {
   const { user, profile } = await getMyAccount();
+  const overview = await getMyDashboardOverview();
 
   const displayName =
     profile.displayName?.trim() ||
@@ -66,13 +75,44 @@ export default async function DashboardPage() {
         </h1>
 
         <p className="mt-3 max-w-2xl text-muted-foreground">
-          Your personal dashboard is ready. This is
-          where your schedule, tasks, and intelligent
-          daily planning will come together.
+          Here is what today looks like across your
+          schedule, tasks, and plans.
         </p>
       </div>
 
-      <section aria-labelledby="modules-title">
+      <section aria-labelledby="today-title">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2
+              id="today-title"
+              className="text-xl font-semibold"
+            >
+              Today
+            </h2>
+
+            <p className="mt-1 text-sm text-muted-foreground">
+              {overview.todayLabel} · {overview.timezone}
+            </p>
+          </div>
+
+          {overview.truncated && (
+            <Badge variant="outline">
+              Showing the first items of the day
+            </Badge>
+          )}
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <NowNextCard overview={overview} />
+          <ScheduleCard overview={overview} />
+          <TodaysTasksCard overview={overview} />
+          <DailyPlanCard overview={overview} />
+          <DeadlinesCard overview={overview} />
+          <RemindersCard overview={overview} />
+        </div>
+      </section>
+
+      <section aria-labelledby="modules-title" className="mt-10">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2
@@ -131,7 +171,7 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>
-              Profile & Preferences
+              Profile &amp; Preferences
             </CardTitle>
 
             <CardDescription>
@@ -167,25 +207,29 @@ export default async function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <div className="mb-3 flex size-10 items-center justify-center rounded-lg bg-muted">
-              <Clock3 className="size-5" />
-            </div>
-
             <CardTitle>
-              Daily Overview
+              Google Calendar
             </CardTitle>
 
             <CardDescription>
-              A snapshot of your upcoming day.
+              Imported events appear on your calendar
+              and Asteria events mirror back to Google.
             </CardDescription>
           </CardHeader>
 
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Calendar and task summaries will
-              appear here after the productivity
-              modules are implemented.
+              Manage the connection, imported calendars,
+              and two-way sync from Settings.
             </p>
+
+            <Link
+              href="/settings"
+              className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+            >
+              Manage Integration
+              <ArrowRight className="size-4" />
+            </Link>
           </CardContent>
         </Card>
       </section>
