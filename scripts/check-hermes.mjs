@@ -151,6 +151,62 @@ test("gemini client parses text and tool calls, and fails with generic errors", 
   } finally {
     globalThis.fetch = previousFetch;
   }
+
+  // A 404 must not be retried; the next status must be a retryable 503 followed by success.
+  let attempt = 0;
+  const retryFetch = async () => {
+    attempt += 1;
+    if (attempt === 1) return { ok: false, status: 503, json: async () => ({}) };
+    return { ok: true, status: 200, json: async () => candidate([{ text: "recovered" }]) };
+  };
+  globalThis.fetch = retryFetch;
+  try {
+    const retry = await generateContent({ system: "s", contents: [{ role: "user", parts: [{ text: "hi" }] }] });
+    assert.equal(retry.text, "recovered");
+    assert.equal(attempt, 2);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+
+  // Default thinking budget is sent for Gemini 3.x responsiveness.
+  let thinkingBody = null;
+  globalThis.fetch = async (_url, init) => {
+    thinkingBody = JSON.parse(init.body);
+    return { ok: true, status: 200, json: async () => candidate([{ text: "ok" }]) };
+  };
+  try {
+    await generateContent({ system: "s", contents: [{ role: "user", parts: [{ text: "hi" }] }] });
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+  assert.equal(thinkingBody?.generationConfig?.thinkingConfig?.thinkingBudget, 512);
+});
+
+test("timeouts surface as a distinct, non-retryable failure", async () => {
+  const load = createLoader();
+  const { generateContent, GeminiError } = load(path.join(root, "features/hermes/gemini.ts"), {});
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    const error = new Error("The operation was aborted due to timeout");
+    error.name = "TimeoutError";
+    throw error;
+  };
+  try {
+    let attempts = 0;
+    globalThis.fetch = async () => {
+      attempts += 1;
+      const error = new Error("The operation was aborted due to timeout");
+      error.name = "TimeoutError";
+      throw error;
+    };
+    await assert.rejects(
+      generateContent({ system: "s", contents: [{ role: "user", parts: [{ text: "hi" }] }] }),
+      (error) => error instanceof GeminiError && error.kind === "timeout"
+    );
+    assert.equal(attempts, 1, "timeouts must not be retried");
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
 });
 
 test("agent loop executes tools and feeds function responses back", async () => {
@@ -349,5 +405,21 @@ test("chat action validates messages and maps gemini failures", async () => {
     assert.equal(result.reply, "ok");
   } finally {
     fetchStub.restore();
+  }
+
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    const error = new Error("aborted");
+    error.name = "TimeoutError";
+    throw error;
+  };
+  try {
+    const data = new FormData();
+    data.set("message", "What is on today?");
+    const result = await chat.sendHermesMessage(data);
+    assert.equal(result.ok, false);
+    assert.equal(result.error, "hermes_timeout");
+  } finally {
+    globalThis.fetch = previousFetch;
   }
 });

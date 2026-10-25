@@ -45,7 +45,7 @@ const PLANNER_SYSTEM = [
 
 export type PlanningResult =
   | { ok: true; added: number; note: string | null }
-  | { ok: false; error: "invalid_date" | "not_configured" | "no_open_tasks" | "plan_empty" | "model_unavailable" | "hermes_unavailable" };
+  | { ok: false; error: "invalid_date" | "not_configured" | "no_open_tasks" | "plan_empty" | "model_unavailable" | "hermes_timeout" | "hermes_unavailable" };
 
 /**
  * AI Daily Planning: ask Hermes to order the user's open tasks for a date,
@@ -102,11 +102,12 @@ export async function generateMyDailyPlan(dateInput: unknown): Promise<PlanningR
     });
     parsed = JSON.parse(parts.find((part) => typeof part.text === "string")?.text ?? "{}") as typeof parsed;
   } catch (error) {
-    if (error instanceof GeminiError && error.status === 429) {
-      return { ok: false, error: "hermes_unavailable" };
-    }
+    console.error("[hermes] planning failed:", error instanceof GeminiError ? `${error.kind} status=${error.status ?? "n/a"}` : error);
     if (error instanceof GeminiError && error.status === 404) {
       return { ok: false, error: "model_unavailable" };
+    }
+    if (error instanceof GeminiError && error.kind === "timeout") {
+      return { ok: false, error: "hermes_timeout" };
     }
     return { ok: false, error: "hermes_unavailable" };
   }

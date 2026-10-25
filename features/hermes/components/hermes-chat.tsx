@@ -31,6 +31,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_message: "Write a short message first (up to 2000 characters).",
   rate_limited: "Gemini is rate-limiting requests right now. Try again in a moment.",
   model_unavailable: "The configured Gemini model is not available for your key. Set GEMINI_MODEL in .env.local to a supported model, then restart.",
+  hermes_timeout: "Hermes took too long to answer. Try a shorter request, then send it again.",
   hermes_unavailable: "Hermes could not reach the AI service. Try again shortly.",
 };
 
