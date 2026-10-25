@@ -23,7 +23,7 @@ const futureFeatures = getFeaturesByStatus("Future");
 
 const heroStats = [
   { icon: CalendarSync, label: "2-way Google Calendar sync" },
-  { icon: Bot, label: "Hermes AI on Gemini" },
+  { icon: Bot, label: "Asteria bot on Gemini" },
   { icon: ListChecks, label: "Smart daily planning" },
   { icon: ShieldCheck, label: "Owner-scoped by design" },
 ];
@@ -55,7 +55,7 @@ export default function HomePage() {
 
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-slate-300">
               Asteria unites your calendar, tasks, and daily planning in one
-              workspace, with Hermes AI connecting every context and Google
+              workspace, with Asteria bot connecting every context and Google
               Calendar &amp; Discord built in.
             </p>
 
@@ -115,7 +115,7 @@ export default function HomePage() {
               <div className="mt-4 flex items-center gap-2 rounded-2xl border border-dashed border-white/15 p-3.5">
                 <Bot className="size-4 shrink-0 text-indigo-300" aria-hidden="true" />
                 <p className="text-xs text-slate-300">
-                  Daily plan ready: <span className="font-medium text-white">3 tasks</span> arranged by Hermes
+                  Daily plan ready: <span className="font-medium text-white">3 tasks</span> arranged by Asteria bot
                 </p>
               </div>
             </div>
@@ -146,7 +146,7 @@ export default function HomePage() {
               Everything in the MVP, shipped
             </h2>
             <p className="mt-3 text-muted-foreground">
-              Each module owns its data and contributes context to Hermes, so new
+              Each module owns its data and contributes context to Asteria bot, so new
               modules plug in without touching the core.
             </p>
           </div>
@@ -183,14 +183,14 @@ export default function HomePage() {
             </h2>
             <p className="mt-3 leading-relaxed text-muted-foreground">
               The architecture is modular by design: every future module feeds
-              new context to Hermes, so recommendations and automation grow
+              new context to Asteria bot, so recommendations and automation grow
               richer over time, with no rewrites, just additions.
             </p>
             <ul className="mt-6 space-y-3">
               {[
                 "Calendar knows when things happen",
                 "Tasks & Planner know what must be done",
-                "Hermes connects every context into action",
+                "Asteria bot connects every context into action",
               ].map((line) => (
                 <li key={line} className="flex items-start gap-2.5 text-sm">
                   <Check className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
@@ -235,7 +235,7 @@ export default function HomePage() {
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-slate-300">
             Set up in minutes: connect Google Calendar, link Discord, and let
-            Hermes take care of the planning.
+            Asteria bot take care of the planning.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link href="/register" className={buttonVariants({ size: "lg" })}>

@@ -327,7 +327,7 @@ export default async function SettingsPage({
                     <div>
                       <CardTitle>Discord</CardTitle>
                       <CardDescription>
-                        Chat with Hermes from Discord and receive your reminders:
+                        Chat with Asteria bot from Discord and receive your reminders:
                         upcoming events, deadlines, overdue tasks, and your daily plan.
                       </CardDescription>
                     </div>

@@ -36,7 +36,7 @@ const PLAN_SCHEMA: GeminiSchema = {
 };
 
 const PLANNER_SYSTEM = [
-  "You are Hermes, the planning assistant inside Asteria.",
+  "You are Asteria bot, the planning assistant inside Asteria.",
   "Build a realistic ordered daily plan from the user's open tasks and the day's calendar events.",
   "Consider deadlines, priority, difficulty, estimated duration, workload, and the free time left around events.",
   "Only reference the task ids provided; do not invent tasks. Put the most urgent, highest-value work first.",

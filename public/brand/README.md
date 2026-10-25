@@ -3,6 +3,7 @@
 Vector recreation of concept #2: a four-point star with tiny gold/light violet rays, matching the Celestial palette. No letter A is used as the symbol. All SVG files are resolution-independent; wordmark text is converted to vector outlines so its appearance does not depend on locally installed fonts.
 
 ## Files
+- `asteria-bot-avatar.png`: 512px bot avatar derived from the dark symbol, used on the web and Discord
 - `asteria-logo-light.svg`: horizontal icon + wordmark on a light surface
 - `asteria-logo-dark.svg`: horizontal icon + wordmark on a dark surface
 - `asteria-logo-stacked-light.svg` and `asteria-logo-stacked-dark.svg`: centered logo

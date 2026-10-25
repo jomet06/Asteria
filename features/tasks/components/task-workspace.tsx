@@ -21,6 +21,7 @@ import {
   Inbox,
   Menu,
   Plus,
+  Search,
   SlidersHorizontal,
   X,
 } from "lucide-react";
@@ -66,7 +67,6 @@ import {
   WorkspaceDialog,
 } from "./workspace-dialog";
 
-import { WorkspaceTheme } from "./workspace-theme";
 import { feedbackMessages } from "./use-workspace-mutation";
 import { useLocalToday } from "./use-local-today";
 
@@ -299,11 +299,7 @@ export function TaskWorkspace({
   }
 
   function focusComposer() {
-    composerRef.current?.scrollIntoView({
-      block: "center",
-    });
-
-    composerRef.current?.focus();
+    setNewTaskOpen(true);
   }
 
   function clearFilters() {
@@ -334,11 +330,7 @@ export function TaskWorkspace({
       ) {
         event.preventDefault();
 
-        composerRef.current?.scrollIntoView({
-          block: "center",
-        });
-
-        composerRef.current?.focus();
+        setNewTaskOpen(true);
       }
     }
 
@@ -430,38 +422,26 @@ export function TaskWorkspace({
 
       <section
         aria-labelledby="workspace-title"
-        className="mx-auto w-full min-w-0 max-w-4xl px-4 pt-3 pb-28 sm:px-8 sm:pt-10 lg:px-12 lg:pb-16"
+        className="mx-auto w-full min-w-0 max-w-5xl px-4 pt-6 pb-28 sm:px-8 sm:pt-8 lg:px-12 lg:pb-16"
       >
-        <div className="mb-5 hidden lg:mb-7 lg:block">
-          {compactSidebar}
-        </div>
-
-        <div className="mb-3 flex items-center justify-between gap-3 sm:mb-6">
+        <div className="mb-3">
           <p className="text-xs font-medium tracking-[0.14em] text-muted-foreground uppercase">
             Your workspace
           </p>
 
-          <div className="flex items-center gap-1">
-            <span className="hidden text-xs text-muted-foreground lg:inline">
-              Quick add{" "}
-              <kbd className="ml-1 rounded border px-1.5 py-0.5 font-sans">
-                Ctrl / ⌘ K
-              </kbd>
-            </span>
-
-            <WorkspaceTheme />
-          </div>
         </div>
 
         {/* PAGE HEADING */}
 
-        <header className="mb-5 sm:mb-7">
+        <header className="mb-6 grid min-w-0 gap-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-6">
+          <div className="min-w-0">
           <div className="flex items-start justify-between gap-3">
             <h1
               ref={headingRef}
               tabIndex={-1}
               id="workspace-title"
-              className="min-w-0 text-3xl font-semibold tracking-tight wrap-break-word outline-none sm:text-4xl"
+              title={title}
+              className="line-clamp-2 min-w-0 text-3xl font-semibold tracking-tight [overflow-wrap:anywhere] outline-none sm:text-4xl"
             >
               {title}
             </h1>
@@ -510,23 +490,28 @@ export function TaskWorkspace({
           )}
 
           {project?.description && (
-            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground wrap-break-word">
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]">
               {project.description}
             </p>
           )}
 
           {/* DAILY PLANNER */}
 
-          <div className="mt-4">
+          </div>
+
+          <div className="flex flex-wrap items-start gap-2 sm:pt-1">
             <Link
               href="/tasks/planner"
               className="inline-flex min-h-11 items-center gap-2 rounded-lg border bg-card px-4 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
             >
               <CalendarDays className="size-4" />
-              Open Daily Planner
+              Daily planner
             </Link>
+            {!project?.isArchived && <Button type="button" className="min-h-11 gap-2 px-4" onClick={focusComposer} title="New task (Ctrl / ⌘ K)"><Plus /> New task</Button>}
           </div>
         </header>
+
+        <div className="mb-5 hidden lg:block">{compactSidebar}</div>
 
         {/* WORKSPACE WARNINGS */}
 
@@ -556,9 +541,15 @@ export function TaskWorkspace({
 
         {/* QUICK ADD */}
 
-        <div className="mb-7 flex flex-wrap gap-2">
-          {!project?.isArchived && <Button type="button" onClick={() => setNewTaskOpen(true)}><Plus /> New task</Button>}
-          <Button type="button" variant={filtersActive ? "secondary" : "outline"} onClick={() => setFilterOpen(true)}><SlidersHorizontal /> Filters{filtersActive ? " active" : ""}</Button>
+        <div className="mb-6 flex min-w-0 items-center gap-2">
+          <div className="relative min-w-0 flex-1">
+            <label htmlFor="workspace-search" className="sr-only">Search tasks</label>
+            <Search aria-hidden="true" className="pointer-events-none absolute top-3.5 left-3 size-4 text-muted-foreground" />
+            <input id="workspace-search" type="search" autoComplete="off" maxLength={120}
+              value={filters.query} onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
+              placeholder="Search your tasks…" className="h-11 w-full min-w-0 rounded-lg border bg-card pr-3 pl-10 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring" />
+          </div>
+          <Button type="button" className="min-h-11 gap-2 px-3" variant={filtersActive ? "secondary" : "outline"} onClick={() => setFilterOpen(true)}><SlidersHorizontal /> Filters{filtersActive && <span className="size-1.5 rounded-full bg-primary" aria-label="Filters active" />}</Button>
         </div>
 
         {/* ====================================
@@ -589,7 +580,7 @@ export function TaskWorkspace({
           </>
         )}
 
-        {!project?.isArchived && <Button type="button" variant="outline" className="mt-6 w-full border-dashed" onClick={() => setNewTaskOpen(true)}><Plus /> New task</Button>}
+        {!project?.isArchived && active.length > 0 && <Button type="button" variant="ghost" className="mt-3 min-h-11 w-full justify-start gap-2 pl-4 text-muted-foreground" onClick={focusComposer}><Plus /> Add task</Button>}
 
         {/* ====================================
             NO MATCHING RESULTS

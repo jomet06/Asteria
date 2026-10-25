@@ -150,7 +150,7 @@ export function DailyPlanCard({ overview }: { overview: DashboardOverview }) {
         </div>
         <CardTitle>Daily Plan</CardTitle>
         <CardDescription>
-          Your plan for today. Generate it with Hermes AI or arrange it manually.
+          Your plan for today. Generate it with Asteria bot or arrange it manually.
         </CardDescription>
       </CardHeader>
       <CardContent>

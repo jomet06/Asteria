@@ -1,196 +1,130 @@
 "use client";
 
-import {
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-
-import {
-  Bot,
-  LoaderCircle,
-  SendHorizontal,
-  Wrench,
-} from "lucide-react";
-
+import { useEffect, useId, useRef } from "react";
+import { ArrowUp, CalendarDays, CheckCheck, Clock3, LoaderCircle, MessageSquarePlus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BOT_NAME } from "../identity";
+import { CHAT_ERRORS, MAX_MESSAGE_LENGTH, TOOL_LABELS } from "../conversation";
+import { useHermesConversation, type HermesConversation } from "../use-hermes-conversation";
+import { BotAvatar } from "./bot-profile";
+import { MessageContent } from "./message-content";
 
-import { sendHermesMessage, type HermesToolNote } from "../actions";
-
-type ChatMessage = {
-  role: "user" | "model";
-  text: string;
-  tools?: HermesToolNote[];
-};
-
-const GREETING =
-  "Hi! I'm Hermes, your workspace assistant. Ask me to create events or tasks, find free time in your day, or check what's coming up.";
-
-const ERROR_MESSAGES: Record<string, string> = {
-  not_configured: "Hermes is not configured yet. Add GEMINI_API_KEY to .env.local and restart the app.",
-  invalid_message: "Write a short message first (up to 2000 characters).",
-  rate_limited: "Gemini is rate-limiting requests right now. Try again in a moment.",
-  model_unavailable: "The configured Gemini model is not available for your key. Set GEMINI_MODEL in .env.local to a supported model, then restart.",
-  hermes_timeout: "Hermes took too long to answer. Try a shorter request, then send it again.",
-  hermes_unavailable: "Hermes could not reach the AI service. Try again shortly.",
-};
+const STARTERS = [
+  { icon: CalendarDays, title: "What's on today?", detail: "See your schedule and priorities", prompt: "Ringkas jadwal dan tugas prioritas saya hari ini." },
+  { icon: Clock3, title: "Find focus time", detail: "Make room for your next task", prompt: "Cari waktu luang 60 menit hari ini untuk fokus mengerjakan tugas." },
+  { icon: CheckCheck, title: "Create a task", detail: "Turn an idea into a next step", prompt: "Bantu buatkan tugas baru: " },
+] as const;
 
 export function HermesChat() {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: "model", text: GREETING },
-  ]);
-  const [input, setInput] = useState("");
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const conversation = useHermesConversation();
+  return <HermesChatPanel conversation={conversation} />;
+}
+
+export function HermesChatPanel({ conversation, compact = false }: { conversation: HermesConversation; compact?: boolean }) {
+  const { turns, input, setInput, pending, send, newChat } = conversation;
+  const inputId = useId();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const followRef = useRef(true);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [messages, pending]);
+    const scroll = scrollRef.current;
+    if (!scroll) return;
+    if (!turns.length) scroll.scrollTop = 0;
+    else if (followRef.current) scroll.scrollTop = scroll.scrollHeight;
+  }, [turns, pending, compact]);
 
-  async function send() {
-    const text = input.trim();
-    if (!text || pending) return;
+  useEffect(() => {
+    const field = inputRef.current;
+    if (!field) return;
+    field.style.height = "auto";
+    field.style.height = `${Math.min(field.scrollHeight, 160)}px`;
+  }, [input]);
 
-    // The greeting is presentation, not conversation history.
-    const history = messages.slice(1).map(({ role, text: messageText }) => ({ role, text: messageText }));
-
-    setMessages((current) => [...current, { role: "user", text }]);
-    setInput("");
-    setPending(true);
-    setError(null);
-
-    const data = new FormData();
-    data.set("message", text);
-    data.set("history", JSON.stringify(history));
-
-    try {
-      const result = await sendHermesMessage(data);
-      if (result.ok) {
-        setMessages((current) => [
-          ...current,
-          {
-            role: "model",
-            text: result.reply,
-            tools: result.tools.length ? result.tools : undefined,
-          },
-        ]);
-      } else {
-        setError(ERROR_MESSAGES[result.error] ?? "Something went wrong.");
-      }
-    } catch {
-      setError("Something went wrong. Please try again.");
-    } finally {
-      setPending(false);
-    }
+  function submit() {
+    followRef.current = true;
+    void send();
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col rounded-2xl border bg-card">
-      <div
-        aria-live="polite"
-        className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5"
-      >
-        {messages.map((message, index) => (
-          <div
-            key={index}
-            className={`flex gap-2.5 ${message.role === "user" ? "justify-end" : ""}`}
-          >
-            {message.role === "model" && (
-              <div className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                <Bot className="size-4 text-primary" aria-hidden="true" />
-              </div>
-            )}
-            <div className={`max-w-[85%] space-y-2 ${message.role === "user" ? "text-right" : ""}`}>
-              <p
-                className={`inline-block whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
-                  message.role === "user"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted/70 text-foreground"
-                }`}
-              >
-                {message.text}
-              </p>
-              {message.tools?.length ? (
-                <ul className="space-y-1">
-                  {message.tools.map((tool, toolIndex) => (
-                    <li
-                      key={toolIndex}
-                      className="inline-flex max-w-full items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs text-muted-foreground"
-                    >
-                      <Wrench className="size-3 shrink-0" aria-hidden="true" />
-                      <span className="font-medium">{tool.name}</span>
-                      <span className="truncate">{tool.summary}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div ref={scrollRef} role="log" aria-label={`${BOT_NAME} conversation`} aria-live="polite" aria-relevant="additions text"
+        onScroll={(event) => { const area = event.currentTarget; followRef.current = area.scrollHeight - area.scrollTop - area.clientHeight < 80; }}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
+        {!turns.length ? (
+          <div className={`mx-auto grid min-h-full content-center ${compact ? "max-w-lg gap-5" : "max-w-3xl gap-6 py-3 md:grid-cols-2 md:items-center md:gap-8"}`}>
+            <div>
+              {!compact && <BotAvatar className="mb-4 size-12 rounded-2xl" />}
+              {!compact && <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-primary">A little clarity for your day</p>}
+              <h2 className={`font-semibold tracking-tight ${compact ? "text-2xl" : "text-3xl"}`}>What can we get done?</h2>
+              <p className="mt-3 max-w-sm text-sm leading-6 text-muted-foreground">I&apos;m {BOT_NAME}. Let&apos;s organize your tasks, plan around your calendar, and find time to focus.</p>
+            </div>
+            <div className="grid gap-2">
+              {STARTERS.map(({ icon: Icon, title, detail, prompt }) => (
+                <button key={title} type="button" onClick={() => { setInput(prompt); inputRef.current?.focus({ preventScroll: true }); }}
+                  className={`group flex min-w-0 items-center gap-3 rounded-xl border bg-background/50 px-3.5 text-left outline-none transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:ring-2 focus-visible:ring-ring ${compact ? "min-h-11 py-2" : "min-h-14 py-3"}`}>
+                  <Icon className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                  <span className="min-w-0 flex-1"><span className="block text-sm font-medium">{title}</span>{!compact && <span className="mt-0.5 block text-xs text-muted-foreground">{detail}</span>}</span>
+                  <span aria-hidden="true" className="text-muted-foreground transition-transform group-hover:translate-x-0.5">↗</span>
+                </button>
+              ))}
             </div>
           </div>
-        ))}
-
-        {pending && (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-            <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-            Hermes is thinking…
-          </p>
+        ) : (
+          <div className="mx-auto max-w-2xl space-y-6">
+            {turns.map((turn) => (
+              <div key={turn.id} className="space-y-5">
+                <div className="flex justify-end pl-8">
+                  <div className="max-w-[90%] min-w-0 whitespace-pre-wrap wrap-anywhere rounded-2xl rounded-br-md bg-primary/15 px-4 py-3 text-sm leading-6">{turn.message}</div>
+                </div>
+                {turn.reply !== undefined && (
+                  <div className="flex min-w-0 items-start gap-3">
+                    <BotAvatar className="mt-1 size-7 rounded-lg" />
+                    <div className="min-w-0 flex-1 space-y-3">
+                      <span className="text-xs font-medium text-muted-foreground">{BOT_NAME}</span>
+                      <MessageContent text={turn.reply} />
+                      {!!turn.tools?.length && <details className="rounded-xl border bg-muted/20 text-xs text-muted-foreground">
+                        <summary className="cursor-pointer px-3 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-ring">Workspace activity · {turn.tools.length}</summary>
+                        <ul className="space-y-3 border-t px-3 py-3">{turn.tools.map((tool, index) => <li key={index} className="wrap-anywhere"><span className="font-medium text-foreground">{TOOL_LABELS[tool.name] ?? "Workspace action"}</span><p className="mt-1 leading-5">{tool.summary}</p></li>)}</ul>
+                      </details>}
+                    </div>
+                  </div>
+                )}
+                {turn.error && <div role="alert" className="rounded-xl border border-destructive/25 bg-destructive/5 px-4 py-3 text-sm leading-6 text-destructive">{CHAT_ERRORS[turn.error] ?? CHAT_ERRORS.hermes_unavailable}</div>}
+              </div>
+            ))}
+            {pending && <div role="status" className="flex items-center gap-3 text-sm text-muted-foreground"><BotAvatar className="size-7 rounded-lg" /><LoaderCircle className="size-4 motion-safe:animate-spin" aria-hidden="true" />{BOT_NAME} is thinking…</div>}
+          </div>
         )}
-
-        <div ref={bottomRef} />
       </div>
 
-      {error && (
-        <p role="alert" className="border-t px-4 pt-3 text-sm text-destructive sm:px-5">
-          {error}
-        </p>
-      )}
-
-      <form
-        aria-label="Message Hermes"
-        aria-busy={pending}
-        className="flex items-end gap-2 border-t p-3 sm:p-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void send();
-        }}
-      >
-        <label htmlFor="hermes-input" className="sr-only">
-          Message Hermes
-        </label>
-        <textarea
-          id="hermes-input"
-          rows={1}
-          maxLength={2000}
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              void send();
-            }
-          }}
-          placeholder="Ask Hermes to plan your day, add an event, or create a task…"
-          className="max-h-40 min-h-11 flex-1 resize-y rounded-xl border bg-background px-3.5 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          disabled={pending}
-        />
-        <Button
-          type="submit"
-          size="icon"
-          aria-label="Send message"
-          className="size-11 shrink-0 rounded-full"
-          disabled={pending || !input.trim()}
-        >
-          {pending ? (
-            <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <SendHorizontal className="size-4" aria-hidden="true" />
-          )}
-        </Button>
-      </form>
-
-      <p className="px-4 pb-3 text-xs text-muted-foreground sm:px-5">
-        Hermes acts through validated workspace tools only — every change it makes follows the same rules as the app.
-      </p>
+      <div className="shrink-0 border-t bg-background/80 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5">
+        <form aria-label={`Message ${BOT_NAME}`} aria-busy={pending} onSubmit={(event) => { event.preventDefault(); submit(); }}
+          className="mx-auto max-w-2xl rounded-2xl border bg-card p-2 shadow-sm focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10">
+          <label htmlFor={inputId} className="sr-only">Message {BOT_NAME}</label>
+          <textarea ref={inputRef} id={inputId} rows={1} maxLength={MAX_MESSAGE_LENGTH} value={input}
+            onChange={(event) => setInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); submit(); }
+            }}
+            placeholder="Ask, plan, or create something…"
+            aria-describedby={`${inputId}-hint`}
+            className="block max-h-40 min-h-12 w-full resize-none bg-transparent px-2.5 py-3 text-sm leading-6 outline-none placeholder:text-muted-foreground" />
+          <div className="flex items-center justify-between gap-2 pl-2.5">
+            {turns.length ? <button type="button" disabled={pending} onClick={() => { newChat(); inputRef.current?.focus({ preventScroll: true }); }}
+              className="flex min-h-10 items-center gap-1.5 rounded-lg px-1 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">
+              <MessageSquarePlus className="size-3.5" aria-hidden="true" />New chat
+            </button> : <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground"><Sparkles className="size-3 shrink-0" aria-hidden="true" />Tasks & calendar</span>}
+            <div className="flex items-center gap-2">
+              {input.length > 1700 && <span className="text-[11px] tabular-nums text-muted-foreground">{input.length}/{MAX_MESSAGE_LENGTH}</span>}
+              <Button type="submit" size="icon" aria-label="Send message" className="size-10 shrink-0 rounded-xl" disabled={pending || !input.trim()}>
+                {pending ? <LoaderCircle className="size-4 motion-safe:animate-spin" aria-hidden="true" /> : <ArrowUp className="size-5" aria-hidden="true" />}
+              </Button>
+            </div>
+          </div>
+        </form>
+        <p id={`${inputId}-hint`} className="mt-2 text-center text-[10px] leading-4 text-muted-foreground">Enter to send · Shift + Enter for a new line</p>
+      </div>
     </div>
   );
 }

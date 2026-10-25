@@ -430,6 +430,7 @@ test("hermes floating launcher renders closed and honors visibility", () => {
   const mocks = buildMocks({ prisma: fakePrisma().prisma });
   const fabMocks = {
     ...mocks,
+    "next/navigation": { useRouter: () => ({ refresh() {} }) },
     "@/features/hermes/actions": {
       sendHermesMessage: async () => ({ ok: true, reply: "", tools: [] }),
       generateDailyPlanAction: async () => ({ ok: false, error: "not_configured" }),
@@ -438,11 +439,74 @@ test("hermes floating launcher renders closed and honors visibility", () => {
   const { HermesFab } = load(path.join(root, "components/hermes-fab.tsx"), fabMocks);
 
   const markup = renderToStaticMarkup(React.createElement(HermesFab, { configured: true }));
-  assert.match(markup, /aria-label="Open Hermes chat"/);
+  assert.match(markup, /aria-label="Open Asteria bot chat"/);
   assert.doesNotMatch(markup, /role="dialog"/, "panel must stay closed during SSR");
 
   assert.equal(renderToStaticMarkup(React.createElement(HermesFab, { configured: true, visible: false })), "");
 
   const unconfigured = renderToStaticMarkup(React.createElement(HermesFab, { configured: false }));
-  assert.match(unconfigured, /aria-label="Open Hermes chat"/);
+  assert.match(unconfigured, /aria-label="Open Asteria bot chat"/);
+});
+
+test("conversation history excludes unanswered requests and keeps complete bounded pairs", () => {
+  const { conversationHistory, finishChatTurn } = createLoader()(path.join(root, "features/hermes/conversation.ts"), {});
+  const turns = Array.from({ length: 8 }, (_, i) => ({ id: String(i), message: `request ${i}`, reply: `reply ${i}` }));
+  turns.push({ id: "pending", message: "do not resend this" });
+  turns.push(finishChatTurn({ id: "failed", message: "create task once" }, { ok: false, error: "hermes_timeout" }));
+  const history = conversationHistory(turns);
+  assert.equal(history.length, 12);
+  assert.deepEqual(history[0], { role: "user", text: "request 2" });
+  assert.deepEqual(history.at(-1), { role: "model", text: "reply 7" });
+  assert.equal(history.some((item) => item.text === "create task once"), false);
+  assert.deepEqual(history.map((item) => item.role), Array.from({ length: 12 }, (_, i) => i % 2 ? "model" : "user"));
+  const finished = finishChatTurn(turns[0], { ok: true, reply: "Created", tools: [{ name: "create_task", summary: "Created task" }] });
+  assert.equal(finished.tools[0].summary, "Created task");
+});
+
+test("history rejects prototype keys and empty content", () => {
+  const { sanitizeHistory } = createLoader()(path.join(root, "features/hermes/agent.ts"), buildMocks({}));
+  assert.deepEqual(sanitizeHistory([
+    { role: "__proto__", text: "bad" }, { role: "toString", text: "bad" },
+    { role: "user", text: "   " }, { role: "model", text: "valid" },
+  ]), [{ role: "model", text: "valid" }]);
+});
+
+test("assistant responses format readable text without executing model HTML", () => {
+  const { MessageContent } = createLoader()(path.join(root, "features/hermes/components/message-content.tsx"), {});
+  const markup = renderToStaticMarkup(React.createElement(MessageContent, {
+    text: '**Today**\n\n- Read notes\n- Review `chapter 2`\n\n<script>alert(1)</script>\n\n```html\n<img src=x onerror=alert(1)>\n```',
+  }));
+  assert.match(markup, /<strong[^>]*>Today<\/strong>/);
+  assert.match(markup, /<ul/);
+  assert.match(markup, /<code[^>]*>chapter 2<\/code>/);
+  assert.match(markup, /&lt;script&gt;/);
+  assert.doesNotMatch(markup, /<script|<img/);
+});
+
+test("completed tool activity survives failure of the following AI reply", async () => {
+  const mocks = buildMocks({ prisma: fakePrisma().prisma });
+  let creates = 0;
+  mocks["@/features/tasks/actions"].createTask = async () => {
+    creates += 1;
+    return { kind: "status", message: "created", view: "" };
+  };
+  const { runHermesAgent } = createLoader()(path.join(root, "features/hermes/agent.ts"), mocks);
+  const savedFetch = globalThis.fetch;
+  let requests = 0;
+  globalThis.fetch = async () => {
+    requests += 1;
+    return requests === 1
+      ? { ok: true, status: 200, json: async () => candidate([{ functionCall: { name: "create_task", args: { title: "Read" } } }]) }
+      : { ok: false, status: 404, json: async () => ({}) };
+  };
+  try {
+    const result = await runHermesAgent({ ownerId: OWNER, timezone: "Asia/Jakarta", history: [], message: "Create a task" });
+    assert.equal(creates, 1);
+    assert.equal(requests, 2);
+    assert.equal(result.tools.length, 1);
+    assert.match(result.reply, /Created task/);
+    assert.match(result.reply, /reply could not finish/);
+  } finally {
+    globalThis.fetch = savedFetch;
+  }
 });

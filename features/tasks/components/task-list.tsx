@@ -213,7 +213,7 @@ function TaskRow({
         >
           <span
             className={cn(
-              "block text-sm leading-6 wrap-break-word transition-colors sm:text-[15px]",
+              "block text-sm leading-6 [overflow-wrap:anywhere] transition-colors sm:text-[15px]",
               closed
                 ? "text-muted-foreground line-through decoration-muted-foreground/50"
                 : "font-medium"
@@ -320,14 +320,14 @@ function TaskRow({
               )}
 
             {!closed && task.dependsOnTitle && (
-              <span className={cn(chipClass, "max-w-56 bg-muted text-muted-foreground")}>
+              <span title={`After: ${task.dependsOnTitle}`} className={cn(chipClass, "min-w-0 max-w-full sm:max-w-56 bg-muted text-muted-foreground")}>
                 <Link2 className="size-3 shrink-0" aria-hidden="true" />
                 <span className="truncate">after: {task.dependsOnTitle}</span>
               </span>
             )}
 
             {view === "all" && (
-              <span className={cn(chipClass, "max-w-full bg-muted/60 text-muted-foreground")}>
+              <span title={project?.name ?? "Inbox"} className={cn(chipClass, "min-w-0 max-w-full bg-muted/60 text-muted-foreground")}>
                 <span className="truncate">
                   {project?.name ?? "Inbox"}
 

@@ -13,8 +13,15 @@ export type HermesRunResult = {
   tools: { name: string; summary: string }[];
 };
 
+function interruptedReply(tools: HermesRunResult["tools"]): HermesRunResult {
+  return {
+    reply: `The AI reply could not finish. Here is the workspace activity recorded for this request:\n\n${tools.slice(0, 8).map((tool) => `- ${tool.summary}`).join("\n")}\n\nReview this activity before sending the request again.`,
+    tools,
+  };
+}
+
 const HERMES_SYSTEM = [
-  "You are Hermes, the AI assistant inside Asteria — a personal productivity workspace.",
+  "You are Asteria bot, the AI assistant inside Asteria — a personal productivity workspace.",
   "You can see a snapshot of the user's calendar events and open tasks for today.",
   "Act only through the provided tools; never invent ids that were not given to you.",
   "Prefer creating events and tasks when the user asks for it, then briefly confirm what you did.",
@@ -30,8 +37,9 @@ export function sanitizeHistory(input: unknown): HermesHistoryMessage[] {
       (item): item is HermesHistoryMessage =>
         typeof item === "object" &&
         item !== null &&
-        (item as HermesHistoryMessage).role in { user: 1, model: 1 } &&
-        typeof (item as HermesHistoryMessage).text === "string"
+        ((item as HermesHistoryMessage).role === "user" || (item as HermesHistoryMessage).role === "model") &&
+        typeof (item as HermesHistoryMessage).text === "string" &&
+        Boolean((item as HermesHistoryMessage).text.trim())
     )
     .slice(-MAX_HISTORY)
     .map((item) => ({
@@ -70,7 +78,14 @@ export async function runHermesAgent({
   const tools: { name: string; summary: string }[] = [];
 
   for (let step = 0; step < MAX_STEPS; step += 1) {
-    const { parts } = await generateContent({ system, contents, tools: hermesTools });
+    let parts;
+    try {
+      ({ parts } = await generateContent({ system, contents, tools: hermesTools }));
+    } catch (error) {
+      // Completed tools remain visible even if the model's next response fails.
+      if (tools.length) return interruptedReply(tools);
+      throw error;
+    }
 
     const calls = parts
       .map((part) => part.functionCall)
@@ -98,6 +113,11 @@ export async function runHermesAgent({
     role: "user",
     parts: [{ text: "Summarize what you did and what is left, briefly." }],
   });
-  const final = await generateContent({ system, contents });
-  return { reply: (textFromParts(final.parts) ?? "Done. Ask me anything else.").slice(0, MAX_REPLY), tools };
+  try {
+    const final = await generateContent({ system, contents });
+    return { reply: (textFromParts(final.parts) ?? "Done. Ask me anything else.").slice(0, MAX_REPLY), tools };
+  } catch (error) {
+    if (tools.length) return interruptedReply(tools);
+    throw error;
+  }
 }

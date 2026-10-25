@@ -12,10 +12,10 @@ const PLAN_ERRORS: Record<string, string> = {
   not_configured: "Add GEMINI_API_KEY to .env.local to enable AI planning.",
   invalid_date: "That date is not valid.",
   no_open_tasks: "There are no open tasks to plan yet.",
-  plan_empty: "Hermes could not build a plan from your tasks.",
+  plan_empty: "Asteria bot could not build a plan from your tasks.",
   model_unavailable: "The configured Gemini model is not available for your key. Set GEMINI_MODEL to a supported model.",
-  hermes_timeout: "Hermes took too long to plan. Try again shortly.",
-  hermes_unavailable: "Hermes is unavailable right now. Try again shortly.",
+  hermes_timeout: "Asteria bot took too long to plan. Try again shortly.",
+  hermes_unavailable: "Asteria bot is unavailable right now. Try again shortly.",
 };
 
 export function GeneratePlanButton({ date }: { date: string }) {
@@ -58,7 +58,7 @@ export function GeneratePlanButton({ date }: { date: string }) {
         ) : (
           <Sparkles className="size-4" aria-hidden="true" />
         )}
-        {pending ? "Planning…" : "Generate with Hermes"}
+        {pending ? "Planning…" : "Generate with Asteria bot"}
       </Button>
       {(result || error) && (
         <p role={error ? "alert" : "status"} className={`text-xs ${error ? "text-destructive" : "text-muted-foreground"}`}>

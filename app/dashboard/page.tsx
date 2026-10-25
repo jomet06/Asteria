@@ -58,7 +58,7 @@ function todayLabel(iso: string, timezone: string): string {
 const quickLinks = [
   { href: "/calendar", title: "Calendar", blurb: "Events, recurrence, and two-way Google sync.", icon: CalendarDays, accent: "bg-sky-500/10 text-sky-500" },
   { href: "/tasks", title: "To-Do List", blurb: "Tasks, projects, priorities, and dependencies.", icon: ListTodo, accent: "bg-emerald-500/10 text-emerald-500" },
-  { href: "/hermes", title: "Hermes AI", blurb: "Ask, plan, and act across your workspace.", icon: Bot, accent: "bg-violet-500/10 text-violet-500" },
+  { href: "/hermes", title: "Asteria bot", blurb: "Ask, plan, and act across your workspace.", icon: Bot, accent: "bg-violet-500/10 text-violet-500" },
 ];
 
 export default async function DashboardPage() {

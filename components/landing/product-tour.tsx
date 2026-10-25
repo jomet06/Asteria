@@ -118,7 +118,7 @@ function TasksScreen() {
       <div className="rounded-xl border border-dashed bg-muted/30 p-3">
         <div className="flex items-center gap-2 text-xs font-medium">
           <Sparkles className="size-3.5 text-primary" aria-hidden="true" />
-          Daily Plan · arranged by Hermes
+          Daily Plan · arranged by Asteria bot
         </div>
         <div className="mt-2 space-y-1 text-[10px] text-muted-foreground">
           <p>1. Essay draft · 09:00–10:30</p>
@@ -136,7 +136,7 @@ function HermesScreen() {
         <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10">
           <Bot className="size-4 text-primary" aria-hidden="true" />
         </span>
-        <p className="text-sm font-semibold">Hermes</p>
+        <p className="text-sm font-semibold">Asteria bot</p>
         <span className="ml-auto flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400">
           <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" /> Gemini
         </span>
@@ -201,7 +201,7 @@ function DiscordScreen() {
 const tabs = [
   { id: "calendar", label: "Calendar", icon: CalendarDays, blurb: "Month, week and day views with recurring events, conflict checks, and two-way Google Calendar sync.", screen: <CalendarScreen /> },
   { id: "tasks", label: "Tasks & Planner", icon: ListTodo, blurb: "Projects, subtasks, priorities, difficulty, estimates, and dependencies, planned daily by AI.", screen: <TasksScreen /> },
-  { id: "hermes", label: "Hermes AI", icon: Bot, blurb: "A Gemini-powered agent that reads your workspace and acts through validated tools.", screen: <HermesScreen /> },
+  { id: "hermes", label: "Asteria bot", icon: Bot, blurb: "A Gemini-powered agent that reads your workspace and acts through validated tools.", screen: <HermesScreen /> },
   { id: "discord", label: "Discord", icon: MessageCircle, blurb: "Natural-language commands and proactive reminders delivered to your DMs.", screen: <DiscordScreen /> },
 ];
 

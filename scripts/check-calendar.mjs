@@ -78,6 +78,148 @@ function harness(auth = true) {
 const pure = harness();
 const dt = pure.load("features/calendar/date-time.ts");
 const recurrence = pure.load("features/calendar/recurrence.ts");
+const browser = pure.load("features/calendar/event-browser.ts");
+
+const browserEvents = [
+  { id: "a", title: "Study", description: "Chapter TWO", location: "Library", kind: "event", startsAt: "2026-10-02T02:00:00Z", endsAt: "2026-10-02T03:00:00Z", timezone: "Asia/Jakarta", isAllDay: false, recurrenceRule: null },
+  { id: "b", title: "Conference", description: null, location: "Online", kind: "google", startsAt: "2026-10-03T00:00:00Z", endsAt: "2026-10-04T00:00:00Z", timezone: "UTC", isAllDay: true, recurrenceRule: null },
+  { id: "c", title: "Deadline", description: null, location: null, kind: "deadline", startsAt: "2026-10-01T02:00:00Z", endsAt: "2026-10-01T02:01:00Z", timezone: "Asia/Jakarta", isAllDay: false, recurrenceRule: null },
+];
+
+test("monthly browser searches title, location and description without case or surrounding whitespace sensitivity", () => {
+  for (const query of [" study ", "LIBRARY", "chapter two"]) {
+    assert.deepEqual(browser.filterMonthEvents(browserEvents, { ...browser.DEFAULT_EVENT_FILTERS, query }).map((item) => item.id), ["a"]);
+  }
+});
+
+test("monthly browser combines kind and schedule filters", () => {
+  assert.deepEqual(browser.filterMonthEvents(browserEvents, { ...browser.DEFAULT_EVENT_FILTERS, kind: "google", timing: "all-day" }).map((item) => item.id), ["b"]);
+  assert.equal(browser.filterMonthEvents(browserEvents, { ...browser.DEFAULT_EVENT_FILTERS, kind: "google", timing: "timed" }).length, 0);
+  assert.deepEqual(browser.filterMonthEvents(browserEvents, { ...browser.DEFAULT_EVENT_FILTERS, timing: "timed" }).map((item) => item.id), ["c", "a"]);
+});
+
+test("monthly browser sorts chronologically or alphabetically without mutating source events", () => {
+  const before = browserEvents.map((item) => item.id);
+  for (const [sort, expected] of [["earliest", ["c", "a", "b"]], ["latest", ["b", "a", "c"]], ["title", ["b", "c", "a"]]]) {
+    assert.deepEqual(browser.filterMonthEvents(browserEvents, { ...browser.DEFAULT_EVENT_FILTERS, sort }).map((item) => item.id), expected);
+  }
+  assert.deepEqual(browserEvents.map((item) => item.id), before);
+});
+
+test("monthly browser supports legacy personal events, no matches and an empty month", () => {
+  assert.equal(browser.filterMonthEvents([{ ...browserEvents[0], kind: undefined }], { ...browser.DEFAULT_EVENT_FILTERS, kind: "event" }).length, 1);
+  assert.equal(browser.filterMonthEvents(browserEvents, { ...browser.DEFAULT_EVENT_FILTERS, query: "missing" }).length, 0);
+  assert.deepEqual(browser.filterMonthEvents([], browser.DEFAULT_EVENT_FILTERS), []);
+});
+
+test("month boundaries use the profile timezone and exclusive event ends", () => {
+  const events = [
+    { ...browserEvents[0], id: "excluded-before", startsAt: "2026-09-30T16:00:00Z", endsAt: "2026-09-30T17:00:00Z" },
+    { ...browserEvents[0], id: "overlap", startsAt: "2026-09-30T16:00:00Z", endsAt: "2026-09-30T18:00:00Z" },
+    { ...browserEvents[0], id: "excluded-after", startsAt: "2026-10-31T17:00:00Z", endsAt: "2026-10-31T18:00:00Z" },
+  ];
+  assert.deepEqual(browser.eventsInMonth(events, "2026-10", "Asia/Jakarta").map((item) => item.id), ["overlap"]);
+});
+
+test("new event defaults use the selected date rather than the current month", () => {
+  assert.deepEqual(browser.eventDefaults("2026-12-20", "Asia/Jakarta", date("2026-10-25T10:05:00Z")), { start: "2026-12-20T09:00", end: "2026-12-20T10:00" });
+});
+
+test("all-day month filtering uses calendar dates even when the viewer timezone differs", () => {
+  const events = [
+    { ...browserEvents[0], id: "november-only", isAllDay: true, startsAt: "2026-10-31T17:00:00Z", endsAt: "2026-11-01T17:00:00Z" },
+    { ...browserEvents[0], id: "september-only", isAllDay: true, startsAt: "2026-09-29T17:00:00Z", endsAt: "2026-09-30T17:00:00Z" },
+    { ...browserEvents[0], id: "october-first", isAllDay: true, startsAt: "2026-09-30T17:00:00Z", endsAt: "2026-10-01T17:00:00Z" },
+  ];
+  assert.deepEqual(browser.eventsInMonth(events, "2026-10", "UTC").map((item) => item.id), ["october-first"]);
+});
+
+test("today defaults round forward to the next half hour and preserve timezone across midnight", () => {
+  assert.deepEqual(browser.eventDefaults("2026-10-25", "Asia/Jakarta", date("2026-10-25T10:05:00Z")), { start: "2026-10-25T17:30", end: "2026-10-25T18:30" });
+  assert.deepEqual(browser.eventDefaults("2026-12-31", "Asia/Jakarta", date("2026-12-31T16:55:00Z")), { start: "2027-01-01T00:00", end: "2027-01-01T01:00" });
+});
+
+test("client form validation shares server rules and explains invalid title, range and repeat settings", () => {
+  assert.equal(browser.eventFormError(form()), null);
+  assert.match(browser.eventFormError(form({ title: " " })), /title/);
+  assert.match(browser.eventFormError(form({ endLocal: "2026-10-21T09:00" })), /after the start/);
+  assert.match(browser.eventFormError(form({ recurrenceRule: JSON.stringify({ frequency: "weekly", weekdays: [] }) })), /weekdays/);
+  assert.match(browser.eventFormError(form({ recurrenceRule: JSON.stringify({ frequency: "daily", weekdays: [], until: "2026-10-20" }) })), /last occurrence/);
+  const missingFlag = form(); missingFlag.delete("isAllDay");
+  assert.ok(browser.eventFormError(missingFlag));
+});
+
+// Serialize the actual server-rendered successful controls, not a handwritten
+// payload, so missing form fields cannot hide behind mocked action tests.
+function renderedEventFields(h, item = null) {
+  const { EventFields } = h.load("features/calendar/components/event-manager.tsx");
+  const html = renderToStaticMarkup(React.createElement(EventFields, { item, timezone: "Asia/Jakarta", defaults: { start: "2026-11-02T09:00", end: "2026-11-02T10:00" }, occurrenceOnly: false }));
+  const decode = (value) => value.replaceAll("&quot;", '"').replaceAll("&#x27;", "'").replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&");
+  const attrs = (text) => Object.fromEntries([...text.matchAll(/([\w-]+)="([^"]*)"/g)].map((match) => [match[1], decode(match[2])]));
+  const data = new FormData();
+  for (const match of html.matchAll(/<input\b([^>]*)>/g)) {
+    const input = attrs(match[1]);
+    if (input.name && input.type !== "checkbox" && input.type !== "submit") data.append(input.name, input.value ?? "");
+  }
+  for (const match of html.matchAll(/<select\b([^>]*)>([\s\S]*?)<\/select>/g)) {
+    const select = attrs(match[1]);
+    if (!select.name) continue;
+    const options = [...match[2].matchAll(/<option\b([^>]*)>/g)].map((option) => attrs(option[1]));
+    data.set(select.name, (options.find((option) => Object.hasOwn(option, "selected")) ?? options[0]).value);
+  }
+  for (const match of html.matchAll(/<textarea\b([^>]*)>([\s\S]*?)<\/textarea>/g)) {
+    const textarea = attrs(match[1]); if (textarea.name) data.set(textarea.name, decode(match[2]));
+  }
+  return { html, data };
+}
+
+test("actual new-event controls serialize a timed payload that the real create action accepts offline", async () => {
+  const h = harness(); const { data } = renderedEventFields(h);
+  assert.deepEqual(data.getAll("isAllDay"), ["false"]);
+  data.set("title", "Form contract check");
+  assert.equal(browser.eventFormError(data), null);
+  assert.equal((await h.actions().createCalendarEvent(data)).ok, true);
+  assert.equal(h.rows.at(-1).isAllDay, false);
+  assert.equal(h.rows.at(-1).startsAt.toISOString(), "2026-11-02T02:00:00.000Z");
+});
+
+test("actual all-day controls submit the marker and preserve an inclusive end date", async () => {
+  const h = harness();
+  const { data } = renderedEventFields(h, { ...browserEvents[0], title: "All-day form check", isAllDay: true, startsAt: "2026-11-01T17:00:00Z", endsAt: "2026-11-03T17:00:00Z" });
+  assert.deepEqual(data.getAll("isAllDay"), ["true"]);
+  assert.equal(data.get("endDate"), "2026-11-03");
+  assert.equal(browser.eventFormError(data), null);
+  assert.equal((await h.actions().createCalendarEvent(data)).ok, true);
+  assert.equal(h.rows.at(-1).endsAt.toISOString(), "2026-11-03T17:00:00.000Z");
+});
+
+test("actual recurring controls preserve their repeat termination and weekdays", () => {
+  const h = harness();
+  const { data } = renderedEventFields(h, { ...browserEvents[0], recurrenceRule: JSON.stringify({ frequency: "weekly", weekdays: [1, 3], count: 4 }) });
+  assert.deepEqual(JSON.parse(data.get("recurrenceRule")), { frequency: "weekly", weekdays: [1, 3], count: 4 });
+  assert.equal(browser.eventFormError(data), null);
+});
+
+test("separate 24-hour controls retain exact edited minutes and overnight payloads", async () => {
+  const h = harness();
+  const { data } = renderedEventFields(h, { ...browserEvents[0], title: "Night study", timezone: "UTC", isAllDay: false,
+    startsAt: "2026-11-02T21:37:00Z", endsAt: "2026-11-03T00:07:00Z" });
+  assert.equal(data.get("startLocal"), "2026-11-02T21:37");
+  assert.equal(data.get("endLocal"), "2026-11-03T00:07");
+  assert.equal(data.get("timezone"), "UTC");
+  assert.equal(browser.eventFormError(data), null);
+  assert.equal((await h.actions().createCalendarEvent(data)).ok, true);
+  assert.equal(h.rows.at(-1).startsAt.toISOString(), "2026-11-02T21:37:00.000Z");
+  assert.equal(h.rows.at(-1).endsAt.toISOString(), "2026-11-03T00:07:00.000Z");
+});
+
+test("event manager keeps the monthly list behind its button on initial render", () => {
+  const h = harness(); const { EventManager } = h.load("features/calendar/components/event-manager.tsx");
+  const html = renderToStaticMarkup(React.createElement(EventManager, { month: "2026-10", monthLabel: "October 2026", timezone: "Asia/Jakarta", events: browserEvents, limit: 500, truncated: false, schemaPending: false, view: "month", selectedDate: "2026-10-25", today: "2026-10-25", actions: {} }));
+  assert.match(html, /Events this month/);
+  assert.doesNotMatch(html, /aria-label="Calendar events"|aria-label="Edit event:/);
+  assert.doesNotMatch(html, /role="dialog"/);
+});
 const rule = (frequency, extra = {}) => JSON.stringify({ frequency, weekdays: [1, 3], ...extra });
 function expand(extra = {}, from = "2026-10-01T00:00Z", to = "2026-12-01T00:00Z") { return recurrence.expandSeries(row(extra), date(from), date(to)); }
 for (const [zone, utc] of [["Asia/Jakarta", "02"], ["Asia/Makassar", "01"], ["Asia/Jayapura", "00"], ["UTC", "09"]]) test(`wall clock round trip ${zone}`, () => {

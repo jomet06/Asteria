@@ -79,7 +79,7 @@ export async function POST(request: Request) {
       });
       reply = result.reply;
     } catch {
-      reply = "Hermes is unavailable right now. Please try again shortly.";
+      reply = "Asteria bot is unavailable right now. Please try again shortly.";
     }
   }
 

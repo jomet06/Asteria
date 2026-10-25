@@ -23,29 +23,31 @@ function restoreFocus(event: Event, target?: FocusRef) {
 }
 
 export function WorkspaceDialog({
-  open, onOpenChange, title, description, children, variant = "dialog", returnFocusRef,
+  open, onOpenChange, title, description, children, footer, variant = "dialog", size = "default", returnFocusRef,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   description?: string;
   children: ReactNode;
+  footer?: ReactNode;
   variant?: "dialog" | "sheet";
+  size?: "default" | "wide";
   returnFocusRef?: FocusRef;
 }) {
   const descriptionId = useId();
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/35 backdrop-blur-[2px] motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:fade-in motion-safe:data-[state=open]:duration-150" />
+        <Dialog.Overlay className="fixed inset-0 z-[70] bg-black/35 backdrop-blur-[2px] motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:fade-in motion-safe:data-[state=open]:duration-150" />
         <Dialog.Content
           aria-describedby={description ? descriptionId : undefined}
           onCloseAutoFocus={(event) => restoreFocus(event, returnFocusRef)}
           className={cn(
-            "fixed z-50 flex flex-col overflow-hidden bg-background text-foreground shadow-2xl outline-none",
+            "fixed z-[80] flex flex-col overflow-hidden bg-background text-foreground shadow-2xl outline-none",
             variant === "sheet"
-              ? "inset-y-0 right-0 w-full sm:max-w-lg sm:border-l motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:slide-in-from-right-4 motion-safe:data-[state=open]:duration-200"
-              : "top-1/2 left-1/2 max-h-[calc(100dvh_-_2rem)] w-[calc(100%_-_2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:fade-in motion-safe:data-[state=open]:zoom-in-95 motion-safe:data-[state=open]:duration-150"
+              ? cn("inset-y-0 right-0 w-full sm:border-l motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:slide-in-from-right-4 motion-safe:data-[state=open]:duration-200", size === "wide" ? "sm:max-w-2xl" : "sm:max-w-lg")
+              : cn("top-1/2 left-1/2 max-h-[calc(100dvh_-_2rem)] w-[calc(100%_-_2rem)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:fade-in motion-safe:data-[state=open]:zoom-in-95 motion-safe:data-[state=open]:duration-150", size === "wide" ? "max-w-2xl" : "max-w-md")
           )}
         >
           <header className="shrink-0 pt-5 pr-16 pb-4 pl-5 sm:pt-6 sm:pl-6">
@@ -55,6 +57,7 @@ export function WorkspaceDialog({
             </div>
           </header>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6">{children}</div>
+          {footer && <div className="shrink-0 border-t bg-background px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6">{footer}</div>}
           <Dialog.Close asChild>
             <Button type="button" variant="ghost" size="icon" className="absolute top-3 right-3 size-11 sm:top-4 sm:right-4" aria-label={`Close ${title.toLowerCase()}`}>
               <X className="size-5" />
@@ -82,12 +85,12 @@ export function ConfirmDialog({
   return (
     <AlertDialog.Root open={open} onOpenChange={(value) => { if (!pending) onOpenChange(value); }}>
       <AlertDialog.Portal>
-        <AlertDialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" />
+        <AlertDialog.Overlay className="fixed inset-0 z-[90] bg-black/40 backdrop-blur-[2px]" />
         <AlertDialog.Content
           aria-busy={pending}
           onCloseAutoFocus={(event) => restoreFocus(event, returnFocusRef)}
           onEscapeKeyDown={(event) => { if (pending) event.preventDefault(); }}
-          className="fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh_-_2rem)] w-[calc(100%_-_2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border bg-background p-6 text-foreground shadow-2xl outline-none"
+          className="fixed top-1/2 left-1/2 z-[100] max-h-[calc(100dvh_-_2rem)] w-[calc(100%_-_2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border bg-background p-6 text-foreground shadow-2xl outline-none"
         >
           <AlertDialog.Title className="wrap-break-word text-lg font-semibold tracking-tight">{title}</AlertDialog.Title>
           <AlertDialog.Description className="mt-2 text-sm leading-relaxed text-muted-foreground">{description}</AlertDialog.Description>

@@ -378,8 +378,9 @@ test("workspace page renders one navigation feature and only owned tasks/project
   checkKeys(page);
   const markup = renderToStaticMarkup(page);
   assert.match(markup, /To-Do List/);
-  // The compact sidebar collapses the archived section behind an "Archived" toggle.
-  assert.match(markup, />Archived<\/span>/);
+  // Project browsing is deferred behind an accessible, initially closed picker.
+  assert.match(markup, /aria-label="Browse projects"[^>]*aria-expanded="false"/);
+  assert.match(markup, /id="workspace-search"/);
   assert.doesNotMatch(markup, /href="\/projects"/);
   assert.doesNotMatch(markup, /Private task|>Private</);
   assert.match(markup, /aria-label="Complete task: Existing"/);

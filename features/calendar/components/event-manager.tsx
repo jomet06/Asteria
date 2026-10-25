@@ -2,6 +2,9 @@
 "use client";
 
 import {
+  useEffect,
+  useId,
+  useRef,
   useState,
   useTransition,
   type ReactNode,
@@ -14,6 +17,7 @@ import {
   CalendarDays,
   Clock3,
   ExternalLink,
+  ListFilter,
   MapPin,
   Pencil,
   Plus,
@@ -28,7 +32,9 @@ import {
 } from "@/features/tasks/components/workspace-dialog";
 
 import { parseRecurrence } from "../recurrence";
-import { calendarMonthRange } from "../date-time";
+import { eventDefaults, eventFormError, eventsInMonth } from "../event-browser";
+import { MonthEventsDialog } from "./month-events-dialog";
+import { EventDateField, EventTimeField } from "./event-schedule-field";
 
 import type {
   CalendarActionResult,
@@ -42,6 +48,8 @@ import {
   CALENDAR_TIMEZONES,
   formatCalendarLocal,
   previousAllDayDate,
+  parseCalendarLocal,
+  isCalendarDay,
   type CalendarTimezone,
 } from "../date-time";
 
@@ -75,7 +83,7 @@ type Props = {
 };
 
 const fieldClass =
-  "min-h-10 w-full rounded-lg border " +
+  "min-h-11 min-w-0 w-full rounded-lg border " +
   "border-input bg-background px-3 py-2 " +
   "text-sm outline-none focus-visible:ring-2 " +
   "focus-visible:ring-ring disabled:opacity-50";
@@ -145,7 +153,7 @@ function repeatLabel(recurrenceRule: string): string | null {
   return `Weekly on ${rule.weekdays.map((day) => weekdayLongNames[day]).join(", ")}`;
 }
 
-function EventFields({
+export function EventFields({
   item,
   timezone,
   defaults,
@@ -159,9 +167,8 @@ function EventFields({
   const initialRule = parseRecurrence(item?.recurrenceRule ?? "");
   const [frequency, setFrequency] = useState(initialRule?.frequency ?? "none");
   const [termination, setTermination] = useState(initialRule?.until ? "until" : initialRule?.count ? "count" : "never");
-  const [weekdays, setWeekdays] = useState(initialRule?.weekdays ?? [new Date().getUTCDay()]);
   const [until, setUntil] = useState(initialRule?.until ?? "");
-  const [count, setCount] = useState(initialRule?.count ?? 10);
+  const [count, setCount] = useState(String(initialRule?.count ?? 10));
   const [isAllDay, setIsAllDay] = useState(
     item?.isAllDay ?? false
   );
@@ -193,12 +200,57 @@ function EventFields({
         )
       : initialEnd.slice(0, 10);
 
+  const [startLocal, setStartLocal] = useState(initialStart);
+  const [endLocal, setEndLocal] = useState(initialEnd);
+  const [startDate, setStartDate] = useState(initialStart.slice(0, 10));
+  const [endDate, setEndDate] = useState(initialEndDay);
+  const [weekdays, setWeekdays] = useState(initialRule?.weekdays ?? [new Date(`${initialStart.slice(0, 10)}T00:00:00Z`).getUTCDay()]);
+  const [weekdaysTouched, setWeekdaysTouched] = useState(!!initialRule?.weekdays.length);
+  const firstDay = isAllDay ? startDate : startLocal.split("T")[0];
+  const [timedStartDay, startClock = "09:00"] = startLocal.split("T");
+  const [timedEndDay, endClock = "10:00"] = endLocal.split("T");
+  const startInstant = parseCalendarLocal(startLocal, selectedZone);
+  const endInstant = parseCalendarLocal(endLocal, selectedZone);
+  const minutes = startInstant && endInstant ? (endInstant.getTime() - startInstant.getTime()) / 60_000 : 0;
+  const dayCount = isCalendarDay(startDate) && isCalendarDay(endDate || startDate)
+    ? (Date.parse(`${endDate || startDate}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`)) / 86_400_000 + 1 : 0;
+  const duration = isAllDay
+    ? (dayCount > 0 ? `${dayCount} ${dayCount === 1 ? "day" : "days"}` : null)
+    : minutes > 0 ? [Math.floor(minutes / 1440) ? `${Math.floor(minutes / 1440)}d` : "", Math.floor(minutes % 1440 / 60) ? `${Math.floor(minutes % 1440 / 60)}h` : "", minutes % 60 ? `${minutes % 60}m` : ""].filter(Boolean).join(" ") : null;
+  const selectedWeekdays = !weekdaysTouched && frequency === "weekly"
+    ? (isCalendarDay(firstDay) ? [new Date(`${firstDay}T00:00:00Z`).getUTCDay()] : [])
+    : weekdays;
+
+  function toggleAllDay(checked: boolean) {
+    if (checked) {
+      const first = timedStartDay;
+      const last = endClock === "00:00" && isCalendarDay(timedEndDay) && endLocal > startLocal
+        ? new Date(Date.parse(`${timedEndDay}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10)
+        : timedEndDay;
+      setStartDate(first);
+      setEndDate(last < first ? first : last);
+    } else {
+      const nextStart = startDate ? `${startDate}T${startClock}` : "";
+      const lastDay = endDate || startDate;
+      const last = endClock === "00:00" && isCalendarDay(lastDay)
+        ? new Date(Date.parse(`${lastDay}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10)
+        : lastDay;
+      let nextEnd = last ? `${last}T${endClock}` : "";
+      const instant = parseCalendarLocal(nextStart, selectedZone);
+      if (nextEnd <= nextStart && instant) nextEnd = formatCalendarLocal(new Date(instant.getTime() + 3_600_000), selectedZone);
+      setStartLocal(nextStart);
+      setEndLocal(nextEnd);
+    }
+    setIsAllDay(checked);
+  }
+
   // Only series-level recurring events may omit an end date;
   // they then produce one-day instances.
   const recurringSeries = !occurrenceOnly && frequency !== "none";
 
   return (
     <div className="space-y-5">
+      <input type="hidden" name="isAllDay" value={String(isAllDay)} />
       {/* TITLE */}
       <label className="block">
         <span className="sr-only">Event title</span>
@@ -230,102 +282,42 @@ function EventFields({
       )}
 
       {/* WHEN */}
-      <Row icon={Clock3}>
+      <section aria-label="Event schedule">
         <div className="space-y-3">
-          {isAllDay ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label
-                  htmlFor="calendar-start-day"
-                  className="sr-only"
-                >
-                  Start date
-                </label>
-                <input
-                  id="calendar-start-day"
-                  name="startDate"
-                  type="date"
-                  required
-                  defaultValue={
-                    initialStart.slice(0, 10)
-                  }
-                  className={fieldClass}
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="calendar-end-day"
-                  className="sr-only"
-                >
-                  End date (inclusive)
-                </label>
-                <input
-                  id="calendar-end-day"
-                  name="endDate"
-                  type="date"
-                  required={!recurringSeries}
-                  defaultValue={initialEndDay}
-                  className={fieldClass}
-                />
-                {recurringSeries && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Optional — empty means one-day instances.
-                  </p>
-                )}
-              </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-4 rounded-2xl border bg-muted/20 p-3 sm:p-4">
+              <EventDateField id="calendar-start-day" label="Start date" name={isAllDay ? "startDate" : undefined}
+                value={isAllDay ? startDate : timedStartDay}
+                onChange={(day) => isAllDay ? setStartDate(day) : setStartLocal(`${day}T${startClock}`)} />
+              {!isAllDay && <EventTimeField id="calendar-start-time" label="Start time" value={startClock}
+                onChange={(time) => setStartLocal(`${timedStartDay}T${time}`)} />}
             </div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label
-                  htmlFor="calendar-start-time"
-                  className="sr-only"
-                >
-                  Starts
-                </label>
-                <input
-                  id="calendar-start-time"
-                  name="startLocal"
-                  type="datetime-local"
-                  required
-                  step={60}
-                  defaultValue={initialStart}
-                  className={fieldClass}
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="calendar-end-time"
-                  className="sr-only"
-                >
-                  Ends
-                </label>
-                <input
-                  id="calendar-end-time"
-                  name="endLocal"
-                  type="datetime-local"
-                  required
-                  step={60}
-                  defaultValue={initialEnd}
-                  className={fieldClass}
-                />
-              </div>
+            <div className="space-y-4 rounded-2xl border bg-muted/20 p-3 sm:p-4">
+              <EventDateField id="calendar-end-day" label={isAllDay ? "End date (inclusive)" : "End date"} name={isAllDay ? "endDate" : undefined}
+                value={isAllDay ? endDate : timedEndDay} min={firstDay}
+                required={!isAllDay || !recurringSeries}
+                onChange={(day) => isAllDay ? setEndDate(day) : setEndLocal(`${day}T${endClock}`)} />
+              {!isAllDay && <EventTimeField id="calendar-end-time" label="End time" value={endClock}
+                onChange={(time) => setEndLocal(`${timedEndDay}T${time}`)} />}
+              {isAllDay && recurringSeries && <p className="text-xs leading-5 text-muted-foreground">Optional: leave empty for one-day occurrences.</p>}
             </div>
-          )}
+          </div>
+          {!isAllDay && <><input type="hidden" name="startLocal" value={startLocal} /><input type="hidden" name="endLocal" value={endLocal} /></>}
+          <p role="status" className={`flex items-center gap-2 text-xs ${duration ? "text-muted-foreground" : "text-destructive"}`}>
+            <Clock3 className="size-3.5 shrink-0" aria-hidden="true" />{duration ? `Duration: ${duration}` : "Choose an end date and time after the start."}
+          </p>
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <label
               htmlFor="calendar-event-all-day"
-              className="flex min-h-10 cursor-pointer items-center gap-2 text-sm font-medium"
+              className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-medium"
             >
               <input
                 id="calendar-event-all-day"
                 type="checkbox"
                 checked={isAllDay}
                 onChange={(event) =>
-                  setIsAllDay(event.target.checked)
+                  toggleAllDay(event.target.checked)
                 }
                 className="size-4 accent-primary"
               />
@@ -347,7 +339,7 @@ function EventFields({
                   event.target.value as CalendarTimezone
                 )
               }
-              className="min-h-10 min-w-0 flex-1 rounded-lg border bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring sm:max-w-56"
+              className="min-h-11 min-w-0 flex-1 basis-full rounded-xl border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring sm:max-w-72 sm:basis-auto"
             >
               {CALENDAR_TIMEZONES.map(
                 (zone) => (
@@ -384,21 +376,25 @@ function EventFields({
               </select>
 
               {frequency === "weekly" && (
-                <div className="flex flex-wrap gap-1.5">
-                  {weekdayNames.map((day, index) => (
-                    <label key={day} className="cursor-pointer">
+                <fieldset>
+                  <legend className="mb-2 text-xs font-medium text-muted-foreground">Repeat on</legend>
+                  <div className="grid grid-cols-7 gap-1">
+                  {[1, 2, 3, 4, 5, 6, 0].map((index) => (
+                    <label key={index} className="cursor-pointer">
                       <input
                         type="checkbox"
                         className="peer sr-only"
-                        checked={weekdays.includes(index)}
-                        onChange={(event) => setWeekdays(event.target.checked ? [...weekdays, index] : weekdays.filter((day) => day !== index))}
+                        aria-label={weekdayLongNames[index]}
+                        checked={selectedWeekdays.includes(index)}
+                        onChange={(event) => { setWeekdaysTouched(true); setWeekdays(event.target.checked ? [...selectedWeekdays, index] : selectedWeekdays.filter((day) => day !== index)); }}
                       />
-                      <span className="inline-flex min-h-8 items-center rounded-full border px-3 text-xs font-medium transition-colors hover:bg-muted peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground peer-focus-visible:ring-2 peer-focus-visible:ring-ring">
-                        {day}
+                      <span className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border px-1 text-xs font-medium transition-colors hover:bg-muted peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground peer-focus-visible:ring-2 peer-focus-visible:ring-ring">
+                        {weekdayNames[index]}
                       </span>
                     </label>
                   ))}
-                </div>
+                  </div>
+                </fieldset>
               )}
 
               {frequency !== "none" && (
@@ -408,7 +404,7 @@ function EventFields({
                       htmlFor="calendar-termination"
                       className="sr-only"
                     >
-                      Ends
+                      Repeat ends
                     </label>
                     <select
                       id="calendar-termination"
@@ -421,16 +417,7 @@ function EventFields({
                       <option value="count">After occurrences</option>
                     </select>
 
-                    {termination === "until" && (
-                      <input
-                        type="date"
-                        required
-                        aria-label="Last occurrence date"
-                        className={`${fieldClass} sm:max-w-44`}
-                        value={until}
-                        onChange={(event) => setUntil(event.target.value)}
-                      />
-                    )}
+                    {termination === "until" && <div className="w-full min-w-0 sm:max-w-60"><EventDateField id="calendar-repeat-until" label="Last occurrence date" value={until} min={firstDay} onChange={setUntil} /></div>}
 
                     {termination === "count" && (
                       <input
@@ -441,14 +428,14 @@ function EventFields({
                         aria-label="Occurrence count"
                         className={`${fieldClass} sm:max-w-32`}
                         value={count}
-                        onChange={(event) => setCount(Number(event.target.value))}
+                        onInput={(event) => setCount(event.currentTarget.value)}
                       />
                     )}
                   </div>
 
                   <p className="text-xs text-muted-foreground">
-                    Starts on {initialStart.slice(0, 10)} as the first occurrence.
-                    Monthly dates that do not exist are skipped.
+                    Starts on {isCalendarDay(firstDay) ? new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${firstDay}T12:00:00Z`)) : "the selected date"}.
+                    {frequency === "monthly" && " Monthly dates that do not exist are skipped."}
                   </p>
                 </>
               )}
@@ -458,10 +445,10 @@ function EventFields({
           <input
             type="hidden"
             name="recurrenceRule"
-            value={!occurrenceOnly && frequency !== "none" ? JSON.stringify({ frequency, weekdays, ...(termination === "until" ? { until } : termination === "count" ? { count } : {}) }) : ""}
+            value={!occurrenceOnly && frequency !== "none" ? JSON.stringify({ frequency, weekdays: selectedWeekdays, ...(termination === "until" ? { until } : termination === "count" ? { count: Number(count) } : {}) }) : ""}
           />
         </div>
-      </Row>
+      </section>
 
       {/* LOCATION */}
       <Row icon={MapPin}>
@@ -537,20 +524,11 @@ const PREVIEW_KIND_LABEL: { [K in NonNullable<CalendarEventView["kind"]>]?: stri
   google: "Imported from Google Calendar",
 };
 
-const KIND_DOT: Record<string, string> = {
-  event: "bg-primary",
-  block: "bg-violet-500",
-  google: "bg-sky-500",
-  deadline: "bg-amber-500",
-  planner: "bg-emerald-500",
-};
-
 export function EventManager({
   month,
   monthLabel,
   timezone,
   events,
-  limit,
   truncated,
   schemaPending,
   view,
@@ -559,6 +537,7 @@ export function EventManager({
   actions,
 }: Props) {
   const router = useRouter();
+  const editorFormId = useId();
 
   const [editor, setEditor] =
     useState<CalendarEventView | "create" | null>(
@@ -567,6 +546,11 @@ export function EventManager({
 
   const [preview, setPreview] = useState<CalendarEventView | null>(null);
   const [previewDelete, setPreviewDelete] = useState(false);
+  const [monthEventsOpen, setMonthEventsOpen] = useState(false);
+  const monthEventsTrigger = useRef<HTMLButtonElement>(null);
+  const editorTrigger = useRef<HTMLElement | null>(null);
+  const previewTrigger = useRef<HTMLElement | null>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
   // Captured when "New event" is clicked so the dialog opens prefilled
   // with the current hour without reading the clock during render.
   const [createDefaults, setCreateDefaults] = useState({ start: "", end: "" });
@@ -587,15 +571,16 @@ export function EventManager({
       : null;
 
   // The visual grid spans adjacent days; the manager list stays within the month.
-  const { from, to } = calendarMonthRange(month, timezone);
-  const monthEvents = events.filter((event) =>
-    Date.parse(event.startsAt) < to.getTime() &&
-    Date.parse(event.endsAt) > from.getTime()
-  );
+  const monthEvents = eventsInMonth(events, month, timezone);
+  useEffect(() => { if (error) errorRef.current?.focus(); }, [error]);
 
   function openEditor(
     value: CalendarEventView | "create"
   ) {
+    if (value !== "create" && value.kind && value.kind !== "event" && value.kind !== "block") return;
+    editorTrigger.current = value === "create"
+      ? (document.activeElement instanceof HTMLElement ? document.activeElement : null)
+      : previewTrigger.current ?? monthEventsTrigger.current;
     setEditor(value);
     setScope(value !== "create" && value.recurrenceRule ? "occurrence" : "series");
     setConflictConfirmed(false);
@@ -605,18 +590,14 @@ export function EventManager({
   }
 
   function openCreate() {
-    const hour = new Date(
-      Math.floor(Date.now() / 3_600_000) * 3_600_000
-    );
-    setCreateDefaults({
-      start: formatCalendarLocal(hour, timezone),
-      end: formatCalendarLocal(new Date(hour.getTime() + 3_600_000), timezone),
-    });
+    setCreateDefaults(eventDefaults(selectedDate, timezone, new Date()));
     openEditor("create");
   }
 
   function save(data: FormData) {
     if (!editor || pending) return;
+    const invalid = eventFormError(data);
+    if (invalid) { setError(invalid); return; }
 
     const isCreate = editor === "create";
 
@@ -715,7 +696,7 @@ export function EventManager({
     submitRemoval(data);
   }
 
-  const previewDeletable = preview !== null && (preview.kind === "event" || preview.kind === "block");
+  const previewDeletable = preview !== null && (!preview.kind || preview.kind === "event" || preview.kind === "block");
 
   return (
     <div className="space-y-7">
@@ -731,14 +712,20 @@ export function EventManager({
           </p>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" ref={monthEventsTrigger} variant="outline" className="min-h-11 gap-2 px-4" onClick={() => setMonthEventsOpen(true)}>
+          <ListFilter className="size-4" />Events this month<span className="rounded-md bg-muted px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground">{monthEvents.length}{truncated ? "+" : ""}</span>
+        </Button>
         <Button
           type="button"
+          className="min-h-11 gap-2 px-4"
           onClick={openCreate}
           disabled={pending || schemaPending}
         >
           <Plus className="size-4" />
           New event
         </Button>
+        </div>
       </header>
 
       {feedback && (
@@ -757,8 +744,12 @@ export function EventManager({
         timezone={timezone}
         events={events}
         truncated={truncated}
-        onSelectEvent={setPreview}
+        onSelectEvent={(event) => { previewTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; setError(""); setPreview(event); }}
       />
+
+      <MonthEventsDialog key={month} open={monthEventsOpen} onOpenChange={setMonthEventsOpen}
+        monthLabel={monthLabel} events={monthEvents} timezone={timezone} truncated={truncated} scheduleLabel={(event) => eventSchedule(event.isAllDay ? event : { ...event, timezone })} triggerRef={monthEventsTrigger}
+        onSelect={(event) => { setMonthEventsOpen(false); setError(""); previewTrigger.current = monthEventsTrigger.current; setPreview(event); }} />
 
       {/* EVENT PREVIEW */}
       {preview && (
@@ -767,6 +758,7 @@ export function EventManager({
           onOpenChange={(open) => { if (!open) setPreview(null); }}
           title={preview.title}
           description={preview.kind ? PREVIEW_KIND_LABEL[preview.kind] : undefined}
+          returnFocusRef={previewTrigger}
         >
           <div className="space-y-5">
             <Row icon={Clock3}>
@@ -779,13 +771,13 @@ export function EventManager({
 
             {preview.location && (
               <Row icon={MapPin}>
-                <p className="text-sm">{preview.location}</p>
+                <p className="text-sm [overflow-wrap:anywhere]">{preview.location}</p>
               </Row>
             )}
 
             {preview.description && (
               <Row icon={AlignLeft}>
-                <p className="whitespace-pre-wrap text-sm text-muted-foreground">{preview.description}</p>
+                <p className="whitespace-pre-wrap text-sm text-muted-foreground [overflow-wrap:anywhere]">{preview.description}</p>
               </Row>
             )}
 
@@ -861,8 +853,50 @@ export function EventManager({
           title={editing ? "Edit event" : "New event"}
           description={editing ? "Update the event details, then save." : "Schedule a new event."}
           variant="sheet"
+          size="wide"
+          footer={
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {editing && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  disabled={pending || schemaPending}
+                  onClick={() =>
+                    setConfirmDelete(true)
+                  }
+                >
+                  <Trash2 className="size-4" />
+                  Delete
+                </Button>
+              )}
+
+              <div className="ml-auto flex flex-1 justify-end gap-2 sm:flex-none">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={pending || schemaPending}
+                  className="min-h-11 flex-1 sm:flex-none"
+                  onClick={() => setEditor(null)}
+                >
+                  Cancel
+                </Button>
+
+                <Button
+                  type="submit"
+                  form={editorFormId}
+                  disabled={pending || schemaPending}
+                  className="min-h-11 flex-1 rounded-xl px-6 sm:flex-none"
+                >
+                  {pending ? "Saving..." : conflictConfirmed ? "Save anyway" : "Save"}
+                </Button>
+              </div>
+            </div>
+          }
+          returnFocusRef={editorTrigger}
         >
           <form
+            id={editorFormId}
             aria-label="Event form"
             aria-busy={pending}
             onSubmit={(event) => {
@@ -876,6 +910,7 @@ export function EventManager({
             }}
             className="space-y-5"
             onChange={() => { setConflictConfirmed(false); setError(""); }}
+            onInput={() => { setConflictConfirmed(false); setError(""); }}
           >
             <fieldset disabled={pending || schemaPending} className="space-y-5">
               {editing?.recurrenceRule && (
@@ -915,47 +950,15 @@ export function EventManager({
             {error && (
               <p
                 role="alert"
-                className="text-sm text-destructive"
+                ref={errorRef}
+                tabIndex={-1}
+                className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive outline-none"
               >
                 {error}
               </p>
             )}
 
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-              {editing && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  disabled={pending || schemaPending}
-                  onClick={() =>
-                    setConfirmDelete(true)
-                  }
-                >
-                  <Trash2 className="size-4" />
-                  Delete
-                </Button>
-              )}
 
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={pending || schemaPending}
-                  onClick={() => setEditor(null)}
-                >
-                  Cancel
-                </Button>
-
-                <Button
-                  type="submit"
-                  disabled={pending || schemaPending}
-                  className="rounded-full px-6"
-                >
-                  {pending ? "Saving..." : "Save"}
-                </Button>
-              </div>
-            </div>
           </form>
         </WorkspaceDialog>
       )}
@@ -970,105 +973,6 @@ export function EventManager({
         onConfirm={remove}
       />
 
-      {/* EVENT LIST */}
-      <section
-        aria-label="Calendar events"
-        className="rounded-xl border bg-card"
-      >
-        <div className="flex items-center justify-between gap-3 border-b p-4">
-          <h2 className="font-semibold">
-            Events this month
-          </h2>
-
-          <span className="text-xs text-muted-foreground">
-            {monthEvents.length}
-            {monthEvents.length === limit
-              ? "+"
-              : ""}{" "}
-            events · {monthLabel}
-          </span>
-        </div>
-
-        {monthEvents.length === 0 ? (
-          <div className="p-10 text-center">
-            <CalendarDays className="mx-auto size-9 text-muted-foreground" />
-
-            <h3 className="mt-3 font-medium">
-              No events this month
-            </h3>
-
-            <p className="mt-1 text-sm text-muted-foreground">
-              Create an event to get started.
-            </p>
-          </div>
-        ) : (
-          <ul className="divide-y">
-            {monthEvents.map((item) => (
-              <li
-                key={item.id}
-                className="flex flex-wrap items-start justify-between gap-4 p-4 transition-colors hover:bg-muted/30"
-              >
-                <div className="min-w-0 flex-1 space-y-2">
-                  <h3 className="flex items-center gap-2 font-medium wrap-break-word">
-                    <span
-                      className={`size-2 shrink-0 rounded-full ${KIND_DOT[item.kind ?? "event"] ?? "bg-primary"}`}
-                      aria-hidden="true"
-                    />
-                    <span className="min-w-0">{item.title}</span>
-                  </h3>
-
-                  <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Clock3
-                      className="size-4 shrink-0"
-                      aria-hidden="true"
-                    />
-                    {eventSchedule(item)}
-                  </p>
-
-                  {item.location && (
-                    <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <MapPin
-                        className="size-4 shrink-0"
-                        aria-hidden="true"
-                      />
-                      {item.location}
-                    </p>
-                  )}
-
-                  {item.description && (
-                    <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-                      {item.description}
-                    </p>
-                  )}
-                </div>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={
-                    pending || schemaPending
-                  }
-                  onClick={() =>
-                    openEditor(item)
-                  }
-                  aria-label={`Edit event: ${item.title}`}
-                >
-                  <Pencil className="size-4" />
-                  Edit
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {monthEvents.length === limit && (
-          <p className="border-t p-4 text-xs text-muted-foreground">
-            Showing the first {limit} events.
-            Narrow the displayed date range to inspect other events.
-          </p>
-        )}
-      </section>
     </div>
   );
 }
