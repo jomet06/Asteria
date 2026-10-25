@@ -106,13 +106,15 @@ function timeRange(startsAt: string, endsAt: string, timezone: string): string {
 }
 
 function dayLabel(instantIso: string, timezone: string, style: "long" | "short" = "long"): string {
-  const formatter = new Intl.DateTimeFormat(
-    "en",
-    style === "long"
-      ? { weekday: "long", day: "numeric", month: "long", timeZone: timezone }
-      : { weekday: "short", day: "numeric", month: "short", timeZone: timezone }
-  );
-  return formatter.format(new Date(instantIso));
+  // Assembled from parts so the day always precedes the month ("29 September").
+  const parts = new Intl.DateTimeFormat("en", {
+    weekday: style === "long" ? "long" : "short",
+    day: "numeric",
+    month: style === "long" ? "long" : "short",
+    timeZone: timezone,
+  }).formatToParts(new Date(instantIso));
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("weekday")}, ${get("day")} ${get("month")}`;
 }
 
 /** One icon-led form row, matching the layout of a calendar quick editor. */
@@ -514,18 +516,18 @@ function eventSchedule(
   if (startDay === endDay) {
     const day = dayLabel(item.startsAt, timezone);
     return item.isAllDay
-      ? `${day}⋅All day`
-      : `${day}⋅${timeRange(item.startsAt, item.endsAt, timezone)}`;
+      ? `${day} ⋅ All day`
+      : `${day} ⋅ ${timeRange(item.startsAt, item.endsAt, timezone)}`;
   }
 
   if (item.isAllDay) {
     const inclusiveEnd = new Date(`${endDay}T00:00:00Z`).toISOString();
-    return `${dayLabel(item.startsAt, timezone, "short")} – ${dayLabel(inclusiveEnd, timezone, "short")}⋅All day`;
+    return `${dayLabel(item.startsAt, timezone, "short")} – ${dayLabel(inclusiveEnd, timezone, "short")} ⋅ All day`;
   }
 
   const start = clock12(item.startsAt, timezone);
   const end = clock12(item.endsAt, timezone);
-  return `${dayLabel(item.startsAt, timezone, "short")}⋅${start.time}${start.meridiem} – ${dayLabel(item.endsAt, timezone, "short")}⋅${end.time}${end.meridiem}`;
+  return `${dayLabel(item.startsAt, timezone, "short")} ⋅ ${start.time}${start.meridiem} – ${dayLabel(item.endsAt, timezone, "short")} ⋅ ${end.time}${end.meridiem}`;
 }
 
 const PREVIEW_KIND_LABEL: { [K in NonNullable<CalendarEventView["kind"]>]?: string } = {
