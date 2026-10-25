@@ -11,11 +11,11 @@ export type HermesToolNote = { name: string; summary: string };
 
 export type HermesChatResult =
   | { ok: true; reply: string; tools: HermesToolNote[] }
-  | { ok: false; error: "not_configured" | "invalid_message" | "rate_limited" | "hermes_unavailable" };
+  | { ok: false; error: "not_configured" | "invalid_message" | "rate_limited" | "model_unavailable" | "hermes_unavailable" };
 
 export type HermesPlanResult =
   | { ok: true; added: number; note: string | null }
-  | { ok: false; error: "invalid_date" | "not_configured" | "no_open_tasks" | "plan_empty" | "hermes_unavailable" };
+  | { ok: false; error: "invalid_date" | "not_configured" | "no_open_tasks" | "plan_empty" | "model_unavailable" | "hermes_unavailable" };
 
 export async function sendHermesMessage(
   formData: FormData
@@ -53,6 +53,9 @@ export async function sendHermesMessage(
   } catch (error) {
     if (error instanceof GeminiError && error.status === 429) {
       return { ok: false, error: "rate_limited" };
+    }
+    if (error instanceof GeminiError && error.status === 404) {
+      return { ok: false, error: "model_unavailable" };
     }
     return { ok: false, error: "hermes_unavailable" };
   }

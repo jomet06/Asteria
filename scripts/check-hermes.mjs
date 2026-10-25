@@ -141,6 +141,16 @@ test("gemini client parses text and tool calls, and fails with generic errors", 
   } finally {
     globalThis.fetch = previousFetch;
   }
+
+  globalThis.fetch = async () => ({ ok: false, status: 404, json: async () => ({ error: { message: "model no longer available" } }) });
+  try {
+    await assert.rejects(
+      generateContent({ system: "s", contents: [{ role: "user", parts: [{ text: "hi" }] }] }),
+      (error) => error instanceof GeminiError && error.status === 404
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
 });
 
 test("agent loop executes tools and feeds function responses back", async () => {

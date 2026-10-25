@@ -2,7 +2,7 @@
 // The API key lives in GEMINI_API_KEY; without it every Hermes
 // surface degrades to setup instructions instead of failing.
 
-export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+export const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
 
 export function geminiApiKey(): string | null {
   const key = process.env.GEMINI_API_KEY?.trim();

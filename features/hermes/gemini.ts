@@ -48,7 +48,8 @@ export class GeminiError extends Error {
 }
 
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
-const TIMEOUT_MS = 30_000;
+// Gemini 3.x thinking models can take a minute or more on structured outputs.
+const TIMEOUT_MS = 120_000;
 
 function textFromParts(parts: GeminiPart[]): string | null {
   const text = parts
@@ -108,6 +109,9 @@ export async function generateContent({
     if (response.status === 429) throw new GeminiError("Gemini rate limit reached.", 429);
     if (response.status === 401 || response.status === 403) {
       throw new GeminiError("The Gemini API key was rejected.", response.status);
+    }
+    if (response.status === 404) {
+      throw new GeminiError("The configured Gemini model is not available for this API key.", 404);
     }
     throw new GeminiError("Gemini request failed.", response.status);
   }

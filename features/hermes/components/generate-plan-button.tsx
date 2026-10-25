@@ -13,6 +13,7 @@ const PLAN_ERRORS: Record<string, string> = {
   invalid_date: "That date is not valid.",
   no_open_tasks: "There are no open tasks to plan yet.",
   plan_empty: "Hermes could not build a plan from your tasks.",
+  model_unavailable: "The configured Gemini model is not available for your key. Set GEMINI_MODEL to a supported model.",
   hermes_unavailable: "Hermes is unavailable right now. Try again shortly.",
 };
 
