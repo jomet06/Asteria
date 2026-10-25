@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { loadCalendarEvents } from "@/features/calendar/data";
+import { getNotificationPreferences } from "@/features/notifications/data";
+import type { NotificationPreferences } from "@/features/notifications/types";
 import {
   formatCalendarLocal,
   parseCalendarLocal,
@@ -13,6 +15,7 @@ const MAX_CONTEXT_TASKS = 30;
 export type HermesContext = {
   today: string;
   timezone: CalendarTimezone;
+  notifications: { preferences: NotificationPreferences; schemaPending: boolean };
   events: { title: string; kind: string; time: string; all_day: boolean }[];
   tasks: {
     id: string;
@@ -36,7 +39,7 @@ export async function buildHermesContext(
   const dayStart = parseCalendarLocal(`${today}T00:00`, timezone) ?? now;
   const dayEnd = new Date(dayStart.getTime() + DAY_MS);
 
-  const [calendar, tasks] = await Promise.all([
+  const [calendar, tasks, notifications] = await Promise.all([
     loadCalendarEvents(ownerId, dayStart, dayEnd),
     prisma.task.findMany({
       where: { ownerId, status: { in: ["TODO", "IN_PROGRESS"] } },
@@ -53,11 +56,13 @@ export async function buildHermesContext(
       orderBy: [{ dueAt: "asc" }, { createdAt: "asc" }],
       take: MAX_CONTEXT_TASKS + 1,
     }),
+    getNotificationPreferences(ownerId),
   ]);
 
   return {
     today,
     timezone,
+    notifications,
     events: calendar.events.slice(0, MAX_CONTEXT_EVENTS).map((event) => ({
       title: event.title.slice(0, 120),
       kind: event.kind ?? "event",

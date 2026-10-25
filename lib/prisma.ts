@@ -27,6 +27,9 @@ const schemaSignature = JSON.stringify({
   discordConnection: Prisma.DiscordConnectionScalarFieldEnum,
   discordLinkCode: Prisma.DiscordLinkCodeScalarFieldEnum,
   notificationLog: Prisma.NotificationLogScalarFieldEnum,
+  notificationPreference: Prisma.NotificationPreferenceScalarFieldEnum,
+  notificationDelivery: Prisma.NotificationDeliveryScalarFieldEnum,
+  notificationSchedulerState: Prisma.NotificationSchedulerStateScalarFieldEnum,
 });
 
 const cachedClient =

@@ -69,6 +69,7 @@ function fakePrisma({ openTasks = [] } = {}) {
 function buildMocks({ prisma, calendarEvents = [] } = {}) {
   return {
     "@/lib/prisma": { prisma },
+    "@/features/notifications/data": { getNotificationPreferences: async () => ({ preferences: { inAppEnabled: true, discordEnabled: false }, schemaPending: false }) },
     "@/features/profile/data": {
       getMyAccount: async () => ({
         user: { id: OWNER, email: "owner@example.com" },

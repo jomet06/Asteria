@@ -126,17 +126,26 @@ async function onMessage(message) {
   }
 }
 
+let tickRunning = false;
 async function tick() {
+  if (tickRunning) return;
+  tickRunning = true;
   try {
     const response = await fetch(`${BASE}/api/discord/tick`, {
       method: "POST",
       headers: { "x-asteria-secret": SECRET },
       signal: AbortSignal.timeout(120_000),
     });
+    if (!response.ok) {
+      console.error(`[discord-bot] scheduler rejected tick (HTTP ${response.status})`);
+      return;
+    }
     const data = await response.json().catch(() => ({}));
     if (data.sent > 0) console.log(`[discord-bot] reminders sent: ${data.sent}`);
   } catch (error) {
     console.error("[discord-bot] tick error:", error.message);
+  } finally {
+    tickRunning = false;
   }
 }
 

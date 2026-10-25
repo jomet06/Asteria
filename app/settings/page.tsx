@@ -36,6 +36,8 @@ import { discordConfigured } from "@/features/discord/config";
 import { getMyDiscordConnection } from "@/features/discord/data";
 import { disconnectDiscordAction } from "@/features/discord/actions";
 import { DiscordConnectForm } from "@/features/discord/components/discord-connect";
+import { getNotificationPreferences } from "@/features/notifications/data";
+import { NotificationSettings } from "@/features/notifications/components/notification-settings";
 
 export const instant = false;
 
@@ -91,6 +93,7 @@ export default async function SettingsPage({
 
   const { status, error, google } = await searchParams;
   const { user, profile } = await getMyAccount();
+  const notificationSettings = await getNotificationPreferences(user.id);
   const googleConnection = await getMyGoogleCalendarConnection();
   const googleSources = googleConnection ? await getMyGoogleCalendarSources() : [];
   const googlePushBacklog = googleConnection ? await getMyGooglePushBacklog() : 0;
@@ -118,7 +121,7 @@ export default async function SettingsPage({
 
   return (
     <AppShell activePage="settings">
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-6">
         {/* HEADER */}
         <header className="rounded-3xl border bg-card p-6 sm:p-8">
           <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
@@ -137,6 +140,8 @@ export default async function SettingsPage({
           </div>
         </header>
 
+        <NotificationSettings initial={notificationSettings.preferences} schemaPending={notificationSettings.schemaPending} timezone={profile.timezone} />
+
         {banner && (
           <p
             role={banner.kind}
@@ -150,7 +155,7 @@ export default async function SettingsPage({
           </p>
         )}
 
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        <div className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] [&>*]:min-w-0">
           {/* PROFILE */}
           <Card className="h-full transition-all duration-300 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5">
             <CardHeader>

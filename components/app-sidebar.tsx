@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import {
-  Bell,
   CalendarDays,
   LayoutDashboard,
   ListTodo,
@@ -17,6 +16,7 @@ import {
 import { signOut } from "@/app/auth/actions";
 import { HermesFab } from "@/components/hermes-fab";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { NotificationBell } from "@/features/notifications/components/notification-bell";
 import { cn } from "@/lib/utils";
 
 type PageId = "dashboard" | "tasks" | "calendar" | "hermes" | "settings";
@@ -166,14 +166,7 @@ export function AppSidebar({
           </Link>
 
           <div className="ml-auto flex items-center gap-1">
-            <button
-              type="button"
-              aria-label="Notifications"
-              title="Notifications"
-              className="flex size-10 items-center justify-center rounded-lg hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Bell className="size-5" aria-hidden="true" />
-            </button>
+            <NotificationBell />
 
             <ThemeToggle className="size-10 text-foreground hover:bg-muted" />
 

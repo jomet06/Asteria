@@ -1,18 +1,19 @@
-import { discordBotToken, discordInternalSecret, timingSafeEqualStrings } from "@/features/discord/config";
+import { discordInternalSecret, timingSafeEqualStrings } from "@/features/discord/config";
 import { runDiscordReminderTick } from "@/features/discord/notifications";
 
-// Internal tick target for the bot runner: evaluates reminder triggers
-// and pushes due notifications. Secret-gated, idempotent via the log.
+export const maxDuration = 60;
+
+// Legacy runner endpoint uses the same scheduler/leases as /notifications/tick.
 
 export async function POST(request: Request) {
   const secret = discordInternalSecret();
   if (!secret || !timingSafeEqualStrings(request.headers.get("x-asteria-secret") ?? "", secret)) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (!discordBotToken()) {
-    return Response.json({ error: "not_configured" }, { status: 503 });
+  try {
+    const result = await runDiscordReminderTick();
+    return Response.json(result, { status: result.schemaPending ? 503 : 200, headers: { "Cache-Control": "no-store" } });
+  } catch {
+    return Response.json({ error: "scheduler_failed" }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
-
-  const result = await runDiscordReminderTick();
-  return Response.json(result);
 }

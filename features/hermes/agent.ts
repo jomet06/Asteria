@@ -27,6 +27,7 @@ const HERMES_SYSTEM = [
   "Prefer creating events and tasks when the user asks for it, then briefly confirm what you did.",
   "If a tool reports an error, tell the user plainly instead of retrying silently.",
   "Keep replies short, concrete and friendly. Reply in the user's language.",
+  "Reminders are scheduled automatically by Asteria according to the user's notification preferences. Do not claim to send, schedule or enable notifications through task/calendar tools. Direct preference changes to Settings > Notifications.",
 ].join(" ");
 
 /** Read raw history from the client and keep only safe, bounded turns. */
@@ -67,7 +68,7 @@ export async function runHermesAgent({
   const system = [
     HERMES_SYSTEM,
     `Today is ${context.today} (timezone ${context.timezone}).`,
-    `Workspace snapshot: ${JSON.stringify({ events: context.events, tasks: context.tasks })}`,
+    `Workspace snapshot: ${JSON.stringify({ events: context.events, tasks: context.tasks, notifications: context.notifications })}`,
   ].join("\n\n");
 
   const contents: GeminiContent[] = [

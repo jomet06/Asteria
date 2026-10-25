@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+# Local notification evidence can contain account details in screenshots.
+/artifacts/notifications/
 
 # next.js
 /.next/

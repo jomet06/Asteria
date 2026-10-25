@@ -27,6 +27,7 @@ model Profile {
   discordConnection        DiscordConnection?
   discordLinkCodes         DiscordLinkCode[]
   notificationLogs         NotificationLog[]
+  notificationPreference   NotificationPreference?
 
   @@map("profiles")
 }
@@ -75,10 +76,10 @@ model Task {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  owner   Profile  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  dependsOn Task?  @relation("TaskDependency", fields: [dependsOnTaskId], references: [id], onDelete: SetNull)
-  blocking  Task[] @relation("TaskDependency")
+  owner     Profile  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  dependsOn Task?    @relation("TaskDependency", fields: [dependsOnTaskId], references: [id], onDelete: SetNull)
+  blocking  Task[]   @relation("TaskDependency")
 
   subtasks       Subtask[]
   dailyPlanItems DailyPlanItem[]
@@ -157,9 +158,9 @@ model CalendarEvent {
   isCancelled    Boolean   @default(false) @map("is_cancelled")
 
   // Two-way sync with the dedicated Asteria calendar in Google.
-  googleEventId String?  @map("google_event_id") @db.VarChar(512)
-  syncState     String   @default("local") @map("sync_state") @db.VarChar(32)
-  syncError     String?  @map("sync_error") @db.Text
+  googleEventId String? @map("google_event_id") @db.VarChar(512)
+  syncState     String  @default("local") @map("sync_state") @db.VarChar(32)
+  syncError     String? @map("sync_error") @db.Text
 
   task       Task?           @relation(fields: [taskId, ownerId], references: [id, ownerId], onDelete: Cascade, map: "calendar_events_task_owner_fkey")
   parent     CalendarEvent?  @relation("Occurrences", fields: [parentId, ownerId], references: [id, ownerId], onDelete: Cascade, map: "calendar_events_parent_owner_fkey")
@@ -194,25 +195,25 @@ model GoogleCalendarConnection {
   createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  owner Profile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner   Profile                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   sources GoogleCalendarSource[]
 
   @@map("google_calendar_connections")
 }
 
 model GoogleCalendarSource {
-  id                 String   @id @default(uuid()) @db.Uuid
-  ownerId            String   @map("owner_id") @db.Uuid
-  connectionOwnerId  String   @map("connection_owner_id") @db.Uuid
-  googleCalendarId   String   @map("google_calendar_id") @db.VarChar(512)
-  name               String   @db.VarChar(255)
-  isPrimary          Boolean  @default(false) @map("is_primary")
-  selected           Boolean  @default(false)
-  syncStatus         String   @default("idle") @map("sync_status") @db.VarChar(32)
+  id                 String    @id @default(uuid()) @db.Uuid
+  ownerId            String    @map("owner_id") @db.Uuid
+  connectionOwnerId  String    @map("connection_owner_id") @db.Uuid
+  googleCalendarId   String    @map("google_calendar_id") @db.VarChar(512)
+  name               String    @db.VarChar(255)
+  isPrimary          Boolean   @default(false) @map("is_primary")
+  selected           Boolean   @default(false)
+  syncStatus         String    @default("idle") @map("sync_status") @db.VarChar(32)
   lastSuccessfulSync DateTime? @map("last_successful_sync") @db.Timestamptz(3)
-  lastSyncError      String?  @map("last_sync_error") @db.Text
-  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  lastSyncError      String?   @map("last_sync_error") @db.Text
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   owner      Profile                  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   connection GoogleCalendarConnection @relation(fields: [connectionOwnerId], references: [ownerId], onDelete: Cascade)
@@ -224,21 +225,21 @@ model GoogleCalendarSource {
 }
 
 model GoogleEventMirror {
-  id              String   @id @default(uuid()) @db.Uuid
-  ownerId         String   @map("owner_id") @db.Uuid
-  sourceId        String   @map("source_id") @db.Uuid
-  googleEventId   String   @map("google_event_id") @db.VarChar(512)
-  title           String   @db.VarChar(500)
-  description     String?  @db.Text
-  location        String?  @db.VarChar(1000)
-  startsAt        DateTime @map("starts_at") @db.Timestamptz(3)
-  endsAt          DateTime @map("ends_at") @db.Timestamptz(3)
-  timezone        String   @db.VarChar(64)
-  isAllDay        Boolean  @default(false) @map("is_all_day")
-  htmlLink        String?  @map("html_link") @db.VarChar(2000)
+  id              String    @id @default(uuid()) @db.Uuid
+  ownerId         String    @map("owner_id") @db.Uuid
+  sourceId        String    @map("source_id") @db.Uuid
+  googleEventId   String    @map("google_event_id") @db.VarChar(512)
+  title           String    @db.VarChar(500)
+  description     String?   @db.Text
+  location        String?   @db.VarChar(1000)
+  startsAt        DateTime  @map("starts_at") @db.Timestamptz(3)
+  endsAt          DateTime  @map("ends_at") @db.Timestamptz(3)
+  timezone        String    @db.VarChar(64)
+  isAllDay        Boolean   @default(false) @map("is_all_day")
+  htmlLink        String?   @map("html_link") @db.VarChar(2000)
   googleUpdatedAt DateTime? @map("google_updated_at") @db.Timestamptz(3)
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   owner  Profile              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   source GoogleCalendarSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
@@ -279,21 +280,86 @@ model DiscordLinkCode {
 }
 
 // ========================================
-// NOTIFICATION LOG — dedupe for reminders
+// NOTIFICATIONS — persistent inbox and channel delivery queue
 // ========================================
 
 model NotificationLog {
-  id        String   @id @default(uuid()) @db.Uuid
-  ownerId   String   @map("owner_id") @db.Uuid
-  kind      String   @db.VarChar(32)
-  refKey    String   @map("ref_key") @db.VarChar(120)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  id                String    @id @default(uuid()) @db.Uuid
+  ownerId           String    @map("owner_id") @db.Uuid
+  kind              String    @db.VarChar(32)
+  refKey            String    @map("ref_key") @db.VarChar(120)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  title             String?   @db.VarChar(200)
+  message           String?   @db.Text
+  href              String?   @db.VarChar(2048)
+  sourceType        String?   @map("source_type") @db.VarChar(24)
+  sourceId          String?   @map("source_id") @db.Text
+  sourceVersion     String?   @map("source_version") @db.VarChar(120)
+  scheduledAt       DateTime? @map("scheduled_at") @db.Timestamptz(3)
+  expiresAt         DateTime? @map("expires_at") @db.Timestamptz(3)
+  readAt            DateTime? @map("read_at") @db.Timestamptz(3)
+  dismissedAt       DateTime? @map("dismissed_at") @db.Timestamptz(3)
+  inApp             Boolean   @default(false) @map("in_app")
+  legacyDiscordSent Boolean   @default(false) @map("legacy_discord_sent")
 
-  owner Profile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner      Profile                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
 
+  @@unique([id, ownerId], map: "notification_logs_id_owner_unique")
   @@unique([ownerId, kind, refKey], map: "notification_logs_owner_kind_ref_unique")
   @@index([ownerId, createdAt], map: "notification_logs_owner_created_idx")
+  @@index([ownerId, inApp, dismissedAt, readAt, createdAt], map: "notification_logs_inbox_idx")
+  @@index([ownerId, sourceType, sourceVersion], map: "notification_logs_source_idx")
   @@map("notification_logs")
+}
+
+model NotificationPreference {
+  ownerId           String    @id @map("owner_id") @db.Uuid
+  inAppEnabled      Boolean   @default(true) @map("in_app_enabled")
+  discordEnabled    Boolean   @default(true) @map("discord_enabled")
+  calendarEnabled   Boolean   @default(true) @map("calendar_enabled")
+  deadlineEnabled   Boolean   @default(true) @map("deadline_enabled")
+  overdueEnabled    Boolean   @default(true) @map("overdue_enabled")
+  plannerEnabled    Boolean   @default(true) @map("planner_enabled")
+  eventLeadMinutes  Int       @default(15) @map("event_lead_minutes")
+  deadlineLeadDays  Int       @default(1) @map("deadline_lead_days")
+  morningHour       Int       @default(7) @map("morning_hour")
+  overdueRepeatDays Int       @default(1) @map("overdue_repeat_days")
+  taskCursor        String?   @map("task_cursor") @db.Uuid
+  plannerCursor     DateTime? @map("planner_cursor") @db.Date
+  owner             Profile   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+model NotificationDelivery {
+  id             String          @id @default(uuid()) @db.Uuid
+  ownerId        String          @map("owner_id") @db.Uuid
+  notificationId String          @map("notification_id") @db.Uuid
+  channel        String          @default("discord") @db.VarChar(24)
+  status         String          @default("pending") @db.VarChar(16)
+  attempts       Int             @default(0)
+  nextAttemptAt  DateTime        @default(now()) @map("next_attempt_at") @db.Timestamptz(3)
+  claimToken     String?         @map("claim_token") @db.Uuid
+  leaseUntil     DateTime?       @map("lease_until") @db.Timestamptz(3)
+  sentAt         DateTime?       @map("sent_at") @db.Timestamptz(3)
+  lastError      String?         @map("last_error") @db.VarChar(64)
+  notification   NotificationLog @relation(fields: [notificationId, ownerId], references: [id, ownerId], onDelete: Cascade, map: "notification_deliveries_notification_owner_fkey")
+
+  @@unique([notificationId, channel], map: "notification_deliveries_channel_unique")
+  @@index([channel, status, nextAttemptAt, ownerId], map: "notification_deliveries_ready_idx")
+  @@index([ownerId, status, nextAttemptAt], map: "notification_deliveries_owner_idx")
+  @@map("notification_deliveries")
+}
+
+model NotificationSchedulerState {
+  key            String    @id @db.VarChar(32)
+  ownerCursor    String?   @map("owner_cursor") @db.Uuid
+  deliveryCursor String?   @map("delivery_cursor") @db.Uuid
+  leaseToken     String?   @map("lease_token") @db.Uuid
+  leaseUntil     DateTime? @map("lease_until") @db.Timestamptz(3)
+
+  @@map("notification_scheduler_state")
 }
 
 // ========================================

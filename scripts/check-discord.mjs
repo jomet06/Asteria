@@ -39,7 +39,6 @@ function createLoader() {
 const OWNER = "11111111-1111-4111-8111-111111111111";
 const DISCORD_USER = "424242424242424242";
 const CHANNEL = "555555555555555555";
-const TASK_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
 process.env.DISCORD_BOT_TOKEN = "test-bot-token";
 process.env.DISCORD_INTERNAL_SECRET = "test-secret";
@@ -51,10 +50,10 @@ function fakePrisma({ connections = [], profileTimezone = "Asia/Jakarta", openTa
     discordConnection: {
       findUnique: async ({ where }) => {
         calls.inboxConnections.push(where);
-        return connections.find((connection) => connection.discordUserId === where.discordUserId) ?? null;
+        return connections.find((connection) => where.ownerId ? connection.ownerId === where.ownerId : connection.discordUserId === where.discordUserId) ?? null;
       },
       upsert: async ({ where, create, update }) => {
-        const existing = connections.find((connection) => connection.discordUserId === where.discordUserId);
+        const existing = connections.find((connection) => connection.ownerId === where.ownerId);
         if (existing) {
           Object.assign(existing, update);
           return existing;
@@ -78,7 +77,11 @@ function fakePrisma({ connections = [], profileTimezone = "Asia/Jakarta", openTa
     },
     discordLinkCode: {
       findUnique: async ({ where }) => codes.find((code) => code.code === where.code) ?? null,
-      deleteMany: async () => ({ count: 0 }),
+      deleteMany: async ({ where }) => {
+        const before = codes.length;
+        codes = codes.filter((row) => !(Object.entries(where).every(([key, value]) => key === "expiresAt" ? (value.gt ? row.expiresAt > value.gt : row.expiresAt <= value.lte) : row[key] === value)));
+        return { count: before - codes.length };
+      },
       delete: async ({ where }) => {
         codes = codes.filter((code) => code.code !== where.code);
         return {};
@@ -116,7 +119,8 @@ function fakePrisma({ connections = [], profileTimezone = "Asia/Jakarta", openTa
         return { count: 1 };
       },
     },
-    $transaction: async (operations) => Promise.all(operations),
+    $queryRaw: async () => [],
+    $transaction: async (operations) => typeof operations === "function" ? operations(prisma) : Promise.all(operations),
   };
   return { prisma, calls, get codes() { return codes; } };
 }
@@ -174,7 +178,7 @@ test("link codes bind a Discord user and confirm in the DM", async () => {
     }));
     const body = await response.json();
     assert.equal(body.ok, true);
-    assert.equal(store.calls.inboxConnections.length, 1);
+    assert.equal(store.calls.inboxConnections.length, 2);
 
     const sent = rest.calls.at(-1);
     assert.ok(sent.url.includes(`/channels/${CHANNEL}/messages`));
@@ -209,64 +213,23 @@ test("unknown users get link instructions; linked users reach Hermes", async () 
   }
 });
 
-test("reminder tick sends due notifications once and skips duplicates", async () => {
-  const now = Date.now();
-  const store = fakePrisma({
-    connections: [{ ownerId: OWNER, discordUserId: DISCORD_USER, discordUsername: "jonathan", dmChannelId: CHANNEL }],
-    openTasks: [{ id: TASK_A, title: "Report", dueAt: new Date(now + 3_600_000) }],
-    planItems: [{ task: { title: "Report" } }],
+test("legacy Discord tick delegates to the shared notification scheduler", async () => {
+  let calls = 0;
+  const notifications = createLoader()(path.join(root, "features/discord/notifications.ts"), {
+    "@/features/notifications/scheduler": { runNotificationTick: async () => { calls += 1; return { sent: 2, skipped: 0 }; } },
   });
-  const load = createLoader();
-  // Pin the local hour to 08:00 so the daily-plan morning window is deterministic.
-  const realDateTime = createLoader()(path.join(root, "features/calendar/date-time.ts"), {});
-  const dateTimeMock = {
-    ...realDateTime,
-    formatCalendarLocal: (instant, timezone) => {
-      const rendered = realDateTime.formatCalendarLocal(instant, timezone);
-      return `${rendered.slice(0, 11)}08${rendered.slice(13)}`;
-    },
-  };
-  const eventStartingSoon = {
-    id: "event-1",
-    title: "Standup",
-    kind: "event",
-    startsAt: new Date(now + 10 * 60_000).toISOString(),
-    endsAt: new Date(now + 25 * 60_000).toISOString(),
-    timezone: "Asia/Jakarta",
-    isAllDay: false,
-    recurrenceRule: null,
-  };
-  const notifications = load(path.join(root, "features/discord/notifications.ts"), {
-    "@/lib/prisma": { prisma: store.prisma },
-    "@/features/calendar/date-time": dateTimeMock,
-    "@/features/calendar/data": {
-      loadCalendarEvents: async () => ({ events: [eventStartingSoon], truncated: false, schemaPending: false }),
-    },
-  });
-  const rest = restCalls();
-
-  try {
-    const first = await notifications.runDiscordReminderTick();
-    assert.equal(first.sent, 3);
-    const channels = new Set(rest.calls.map((call) => call.url));
-    assert.equal(channels.size, 1);
-    assert.ok(rest.calls.some((call) => call.body.content.includes("Standup")));
-
-    const second = await notifications.runDiscordReminderTick();
-    assert.equal(second.sent, 0, "identical reminders must be deduplicated");
-  } finally {
-    rest.restore();
-  }
+  assert.equal((await notifications.runDiscordReminderTick()).sent, 2);
+  assert.equal(calls, 1);
 });
 
 test("discord REST helper fails soft on rate limits", async () => {
   const load = createLoader();
   const { sendDiscordMessage } = load(path.join(root, "features/discord/rest.ts"), {});
   const previous = globalThis.fetch;
-  globalThis.fetch = async () => ({ ok: false, status: 429, json: async () => ({}) });
+  globalThis.fetch = async () => ({ ok: false, status: 429, headers: new Headers(), json: async () => ({}) });
   try {
     const result = await sendDiscordMessage(CHANNEL, "hello");
-    assert.deepEqual(result, { ok: false, error: "rate_limited" });
+    assert.deepEqual(result, { ok: false, error: "rate_limited", retryable: true, retryAfterMs: 30_000 });
   } finally {
     globalThis.fetch = previous;
   }
@@ -295,9 +258,9 @@ function runnerHarness(dmOnly = true) {
     console: { log: (value) => state.logs.push(value), error: (value) => state.logs.push(value) },
     setInterval: (callback, ms) => { state.intervals.push({ callback, ms }); return state.intervals.length; },
     clearInterval: () => {}, setTimeout: () => {},
-    fetch: async (url, options) => { state.requests.push({ url, options }); return { ok: true, json: async () => ({ ok: state.replyOk }) }; },
+    fetch: async (url, options) => { state.requests.push({ url, options }); if (state.replyGate) await state.replyGate; return { ok: state.httpOk ?? true, status: state.httpOk === false ? 503 : 200, json: async () => ({ ok: state.replyOk }) }; },
   });
-  const runner = vm.runInContext(`${code}\n({ handlePayload, onMessage })`, context);
+  const runner = vm.runInContext(`${code}\n({ handlePayload, onMessage, tick })`, context);
   return { ...runner, state, socket: state.sockets[0] };
 }
 
@@ -356,4 +319,28 @@ test("runner reports a failed Discord reply even when inbox returned HTTP 200", 
   await onMessage({ author: { id: DISCORD_USER }, channel_id: CHANNEL, content: "hello" });
   assert.ok(state.logs.some((value) => value.includes("could not deliver")));
   assert.equal(state.logs.some((value) => value.includes("reply delivered")), false);
+});
+
+test("gateway reminder ticks run without DMs, prevent overlap and report HTTP failures", async () => {
+  const { tick, state } = runnerHarness(false);
+  assert.equal(state.intervals.some((timer) => timer.ms === 60_000), true);
+  let release; state.replyGate = new Promise((done) => { release = done; });
+  const running = tick(); await tick(); assert.equal(state.requests.length, 1);
+  release(); await running; state.replyGate = null; state.httpOk = false; await tick();
+  assert.equal(state.requests.length, 2); assert.ok(state.logs.some((line) => line.includes("HTTP 503")));
+});
+
+test("Discord REST classifies permanent/transient failures, honors retry-after and blocks mentions", async () => {
+  const { sendDiscordMessage } = createLoader()(path.join(root, "features/discord/rest.ts"), {});
+  const previous = globalThis.fetch;
+  try {
+    for (const [status, retryable] of [[401, false], [403, false], [404, false], [408, true], [500, true], [503, true]]) {
+      globalThis.fetch = async () => new Response("", { status });
+      assert.equal((await sendDiscordMessage(CHANNEL, "hello")).retryable, retryable);
+    }
+    globalThis.fetch = async () => Response.json({ retry_after: 93.5 }, { status: 429 });
+    assert.equal((await sendDiscordMessage(CHANNEL, "hello")).retryAfterMs, 93_500);
+    globalThis.fetch = async (_url, init) => { const body = JSON.parse(init.body); assert.equal(body.content.length, 1900); assert.deepEqual(body.allowed_mentions, { parse: [] }); return Response.json({}); };
+    assert.equal((await sendDiscordMessage(CHANNEL, "@everyone".repeat(500))).ok, true);
+  } finally { globalThis.fetch = previous; }
 });

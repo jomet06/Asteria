@@ -10,15 +10,21 @@ export type LinkCodeResult = { code: string; expiresAt: Date };
 
 /** Generate a short-lived pairing code shown in Settings. */
 export async function createDiscordLinkCode(ownerId: string): Promise<LinkCodeResult> {
-  const code = Array.from(randomBytes(CODE_LENGTH))
-    .map((byte) => CODE_ALPHABET[byte % CODE_ALPHABET.length])
-    .join("");
   const expiresAt = new Date(Date.now() + CODE_TTL_MS);
-
-  await prisma.discordLinkCode.deleteMany({ where: { ownerId } });
-  await prisma.discordLinkCode.create({ data: { code, ownerId, expiresAt } });
-
-  return { code, expiresAt };
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const code = Array.from(randomBytes(CODE_LENGTH)).map((byte) => CODE_ALPHABET[byte % CODE_ALPHABET.length]).join("");
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM profiles WHERE id = ${ownerId}::uuid FOR UPDATE`;
+        await tx.discordLinkCode.deleteMany({ where: { ownerId } });
+        await tx.discordLinkCode.create({ data: { code, ownerId, expiresAt } });
+      });
+      return { code, expiresAt };
+    } catch (error) {
+      if ((error as { code?: string }).code !== "P2002" || attempt === 2) throw error;
+    }
+  }
+  throw new Error("Could not generate a pairing code.");
 }
 
 export type ConnectOutcome =
@@ -43,20 +49,33 @@ export async function connectByCode({
   }
 
   const record = await prisma.discordLinkCode.findUnique({ where: { code: normalized } });
-  if (!record || record.expiresAt.getTime() < Date.now()) {
-    await prisma.discordLinkCode.deleteMany({ where: { code: normalized } });
+  if (!record || record.expiresAt.getTime() <= Date.now()) {
+    await prisma.discordLinkCode.deleteMany({ where: { code: normalized, expiresAt: { lte: new Date() } } });
     return { ok: false, message: "That link code expired or was already used. Generate a new one in Asteria Settings." };
   }
 
-  // One Discord user maps to one Asteria account; re-linking moves it.
-  await prisma.$transaction([
-    prisma.discordConnection.upsert({
-      where: { discordUserId },
-      create: { ownerId: record.ownerId, discordUserId, discordUsername, dmChannelId },
-      update: { ownerId: record.ownerId, discordUsername, dmChannelId },
-    }),
-    prisma.discordLinkCode.delete({ where: { code: normalized } }),
-  ]);
+  try {
+    const outcome = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM profiles WHERE id = ${record.ownerId}::uuid FOR UPDATE`;
+      const existing = await tx.discordConnection.findUnique({ where: { discordUserId } });
+      if (existing && existing.ownerId !== record.ownerId) return "conflict";
+      // Consume exactly once in the same transaction as linking. Any unique
+      // conflict rolls this back, preserving the unused code and original link.
+      const consumed = await tx.discordLinkCode.deleteMany({ where: { code: normalized, ownerId: record.ownerId, expiresAt: { gt: new Date() } } });
+      if (!consumed.count) return "expired";
+      await tx.discordConnection.upsert({
+        where: { ownerId: record.ownerId },
+        create: { ownerId: record.ownerId, discordUserId, discordUsername, dmChannelId },
+        update: { discordUserId, discordUsername, dmChannelId },
+      });
+      return "linked";
+    });
+    if (outcome === "conflict") return { ok: false, message: "This Discord account is already linked to another Asteria account. Disconnect it from that account's Settings first." };
+    if (outcome === "expired") return { ok: false, message: "That link code expired or was already used. Generate a new one in Asteria Settings." };
+  } catch (error) {
+    if (!["P2002", "P2034", "P2025"].includes((error as { code?: string }).code ?? "")) throw error;
+    return { ok: false, message: "The connection changed while linking. No account was moved. Generate a new code and retry." };
+  }
 
   return {
     ok: true,

@@ -147,6 +147,7 @@ function harness({ authenticated = true } = {}) {
       // SSR uses the server-provided initialView. History navigation is checked
       // in the browser, where Next supplies a live search-parameter snapshot.
       useSearchParams: () => null,
+      useRouter: () => ({ replace() {} }),
     },
     "next/link": { __esModule: true, default: ({ href, children, ...props }) => {
       delete props.scroll;

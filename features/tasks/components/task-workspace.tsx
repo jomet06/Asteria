@@ -10,7 +10,7 @@ import {
 } from "react";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import {
   Archive,
@@ -103,6 +103,7 @@ export function TaskWorkspace({
   // ========================================
 
   const params = useSearchParams();
+  const router = useRouter();
   const localToday = useLocalToday(today);
 
   const values = params?.getAll("view");
@@ -193,12 +194,23 @@ export function TaskWorkspace({
 
   const [selectedTaskId, setSelectedTaskId] =
     useState<string | null>(null);
+  const linkedTaskId = params?.get("task") ?? null;
+  const [closedTaskLink, setClosedTaskLink] = useState<string | null>(null);
+  function closeTaskDetails() {
+    setSelectedTaskId(null);
+    setClosedTaskLink(linkedTaskId);
+    if (linkedTaskId) {
+      const next = new URLSearchParams(params?.toString());
+      next.delete("task");
+      router.replace(`/tasks${next.size ? `?${next}` : ""}`, { scroll: false });
+    }
+  }
 
   // Always resolve from ALL tasks.
   // Filtering should never close an open drawer.
   const selectedTask =
     tasks.find(
-      (task) => task.id === selectedTaskId
+      (task) => task.id === (selectedTaskId ?? (linkedTaskId !== closedTaskLink ? linkedTaskId : null))
     ) ?? null;
 
   const [dirty, setDirty] = useState(false);
@@ -808,7 +820,7 @@ export function TaskWorkspace({
 
               setDiscardOpen(true);
             } else {
-              setSelectedTaskId(null);
+              closeTaskDetails();
             }
           }
         }}
@@ -836,7 +848,7 @@ export function TaskWorkspace({
                   ? taskTriggerRef.current
                   : headingRef.current;
 
-              setSelectedTaskId(null);
+              closeTaskDetails();
               setDirty(false);
               setEditingPending(false);
             }}
@@ -857,7 +869,7 @@ export function TaskWorkspace({
         returnFocusRef={discardTriggerRef}
         onConfirm={() => {
           setDiscardOpen(false);
-          setSelectedTaskId(null);
+          closeTaskDetails();
           setDirty(false);
         }}
       />
