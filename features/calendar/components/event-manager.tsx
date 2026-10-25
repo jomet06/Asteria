@@ -537,6 +537,14 @@ const PREVIEW_KIND_LABEL: { [K in NonNullable<CalendarEventView["kind"]>]?: stri
   google: "Imported from Google Calendar",
 };
 
+const KIND_DOT: Record<string, string> = {
+  event: "bg-primary",
+  block: "bg-violet-500",
+  google: "bg-sky-500",
+  deadline: "bg-amber-500",
+  planner: "bg-emerald-500",
+};
+
 export function EventManager({
   month,
   monthLabel,
@@ -998,11 +1006,15 @@ export function EventManager({
             {monthEvents.map((item) => (
               <li
                 key={item.id}
-                className="flex flex-wrap items-start justify-between gap-4 p-4"
+                className="flex flex-wrap items-start justify-between gap-4 p-4 transition-colors hover:bg-muted/30"
               >
                 <div className="min-w-0 flex-1 space-y-2">
-                  <h3 className="font-medium wrap-break-word">
-                    {item.title}
+                  <h3 className="flex items-center gap-2 font-medium wrap-break-word">
+                    <span
+                      className={`size-2 shrink-0 rounded-full ${KIND_DOT[item.kind ?? "event"] ?? "bg-primary"}`}
+                      aria-hidden="true"
+                    />
+                    <span className="min-w-0">{item.title}</span>
                   </h3>
 
                   <p className="flex items-center gap-2 text-sm text-muted-foreground">

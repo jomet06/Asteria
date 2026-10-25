@@ -3,7 +3,6 @@ import {
   AlarmClock,
   ArrowRight,
   CalendarDays,
-  Clock3,
   Flag,
   ListChecks,
   ListTodo,
@@ -73,47 +72,12 @@ function TaskRow({ task, timezone }: { task: DashboardTask; timezone: string }) 
   );
 }
 
-export function NowNextCard({ overview }: { overview: DashboardOverview }) {
-  const { ongoing, next, timezone } = overview;
-  return (
-    <Card className="h-full">
-      <CardHeader>
-        <div className="mb-3 flex size-10 items-center justify-center rounded-lg bg-muted">
-          <Clock3 className="size-5" />
-        </div>
-        <CardTitle>Now &amp; Next</CardTitle>
-        <CardDescription>Where you are in today&apos;s schedule.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3 text-sm">
-        {ongoing ? (
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-primary">Happening now</p>
-            <p className="mt-1 font-medium">{ongoing.title}</p>
-            <p className="text-xs text-muted-foreground">until {clockTime(ongoing.endsAt, timezone)}</p>
-          </div>
-        ) : (
-          <p className="text-muted-foreground">Nothing is happening right now.</p>
-        )}
-        {next ? (
-          <div className="border-t pt-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Up next</p>
-            <p className="mt-1 font-medium">{next.title}</p>
-            <p className="text-xs text-muted-foreground">starts at {clockTime(next.startsAt, timezone)}</p>
-          </div>
-        ) : (
-          !ongoing && <p className="text-muted-foreground">No more events scheduled for today.</p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 export function ScheduleCard({ overview }: { overview: DashboardOverview }) {
   return (
-    <Card className="h-full">
+    <Card className="h-full transition-all duration-300 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5">
       <CardHeader>
-        <div className="mb-3 flex size-10 items-center justify-center rounded-lg bg-muted">
-          <CalendarDays className="size-5" />
+        <div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-sky-500/10">
+          <CalendarDays className="size-5 text-sky-500" aria-hidden="true" />
         </div>
         <CardTitle>Today&apos;s Schedule</CardTitle>
         <CardDescription>{overview.todayLabel}</CardDescription>
@@ -132,11 +96,13 @@ export function ScheduleCard({ overview }: { overview: DashboardOverview }) {
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">No events scheduled for today.</p>
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">No events scheduled for today.</p>
+            <Link href="/calendar" className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
+              Create one <ArrowRight className="size-3.5" aria-hidden="true" />
+            </Link>
+          </div>
         )}
-        <Link href="/calendar" className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline">
-          Open Calendar <ArrowRight className="size-4" />
-        </Link>
       </CardContent>
     </Card>
   );
@@ -144,10 +110,10 @@ export function ScheduleCard({ overview }: { overview: DashboardOverview }) {
 
 export function TodaysTasksCard({ overview }: { overview: DashboardOverview }) {
   return (
-    <Card className="h-full">
+    <Card className="h-full transition-all duration-300 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5">
       <CardHeader>
-        <div className="mb-3 flex size-10 items-center justify-center rounded-lg bg-muted">
-          <ListTodo className="size-5" />
+        <div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-emerald-500/10">
+          <ListTodo className="size-5 text-emerald-500" aria-hidden="true" />
         </div>
         <CardTitle>Today&apos;s Tasks</CardTitle>
         <CardDescription>Due today or planned for today.</CardDescription>
@@ -160,10 +126,15 @@ export function TodaysTasksCard({ overview }: { overview: DashboardOverview }) {
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">No tasks due or planned today.</p>
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">No tasks due or planned today.</p>
+            <Link href="/tasks" className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
+              Add a task <ArrowRight className="size-3.5" aria-hidden="true" />
+            </Link>
+          </div>
         )}
-        <Link href="/tasks" className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline">
-          Open To-Do List <ArrowRight className="size-4" />
+        <Link href="/tasks" className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
+          Open To-Do List <ArrowRight className="size-3.5" aria-hidden="true" />
         </Link>
       </CardContent>
     </Card>
@@ -172,10 +143,10 @@ export function TodaysTasksCard({ overview }: { overview: DashboardOverview }) {
 
 export function DailyPlanCard({ overview }: { overview: DashboardOverview }) {
   return (
-    <Card className="h-full">
+    <Card className="h-full transition-all duration-300 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5">
       <CardHeader>
-        <div className="mb-3 flex size-10 items-center justify-center rounded-lg bg-muted">
-          <ListChecks className="size-5" />
+        <div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-violet-500/10">
+          <ListChecks className="size-5 text-violet-500" aria-hidden="true" />
         </div>
         <CardTitle>Daily Plan</CardTitle>
         <CardDescription>
@@ -187,7 +158,9 @@ export function DailyPlanCard({ overview }: { overview: DashboardOverview }) {
           <ol className="space-y-3">
             {overview.planTasks.map((task, index) => (
               <li key={task.id} className="flex items-start gap-3">
-                <span className="mt-0.5 text-xs tabular-nums text-muted-foreground">{index + 1}.</span>
+                <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold tabular-nums text-muted-foreground">
+                  {index + 1}
+                </span>
                 <div className="min-w-0">
                   <p className={`truncate text-sm font-medium ${task.done ? "text-muted-foreground line-through" : ""}`}>
                     {task.title}
@@ -202,12 +175,12 @@ export function DailyPlanCard({ overview }: { overview: DashboardOverview }) {
         ) : (
           <p className="text-sm text-muted-foreground">Nothing is planned for today yet.</p>
         )}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
           <Link
             href={`/tasks/planner?date=${overview.today}`}
-            className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
           >
-            Plan your day <ArrowRight className="size-4" />
+            Plan your day <ArrowRight className="size-3.5" aria-hidden="true" />
           </Link>
           <GeneratePlanButton date={overview.today} />
         </div>
@@ -218,10 +191,10 @@ export function DailyPlanCard({ overview }: { overview: DashboardOverview }) {
 
 export function DeadlinesCard({ overview }: { overview: DashboardOverview }) {
   return (
-    <Card className="h-full">
+    <Card className="h-full transition-all duration-300 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5">
       <CardHeader>
-        <div className="mb-3 flex size-10 items-center justify-center rounded-lg bg-muted">
-          <Flag className="size-5" />
+        <div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-amber-500/10">
+          <Flag className="size-5 text-amber-500" aria-hidden="true" />
         </div>
         <CardTitle>Upcoming Deadlines</CardTitle>
         <CardDescription>Open tasks due within the next 14 days.</CardDescription>
@@ -243,10 +216,10 @@ export function DeadlinesCard({ overview }: { overview: DashboardOverview }) {
 
 export function RemindersCard({ overview }: { overview: DashboardOverview }) {
   return (
-    <Card className="h-full">
+    <Card className="h-full transition-all duration-300 hover:border-destructive/40 hover:shadow-lg hover:shadow-destructive/5">
       <CardHeader>
-        <div className="mb-3 flex size-10 items-center justify-center rounded-lg bg-muted">
-          <AlarmClock className="size-5" />
+        <div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-destructive/10">
+          <AlarmClock className="size-5 text-destructive" aria-hidden="true" />
         </div>
         <CardTitle>Important Reminders</CardTitle>
         <CardDescription>Overdue tasks waiting to be rescheduled.</CardDescription>
@@ -258,7 +231,7 @@ export function RemindersCard({ overview }: { overview: DashboardOverview }) {
               <li key={task.id} className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{task.title}</p>
-                  <p className="mt-0.5 text-xs text-red-600">overdue since {dayLabel(task.dueAt, overview.timezone)}</p>
+                  <p className="mt-0.5 text-xs text-destructive">overdue since {dayLabel(task.dueAt, overview.timezone)}</p>
                 </div>
                 <Badge variant="destructive" className="shrink-0 text-[10px]">
                   {task.priority}

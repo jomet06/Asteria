@@ -6,9 +6,12 @@ import { useSearchParams } from "next/navigation";
 import {
   Check,
   CircleDashed,
+  Clock3,
+  Link2,
+  Loader2,
   CalendarDays,
   Flag,
-  Loader2,
+  Mountain,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -44,6 +47,24 @@ type TaskListProps = {
   label?: string;
 };
 
+const chipClass =
+  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium";
+
+const PRIORITY_ACCENT: Partial<
+  Record<WorkspaceTask["priority"], string>
+> = {
+  URGENT: "bg-red-500",
+  HIGH: "bg-amber-500",
+};
+
+function nextDay(day: string): string {
+  return new Date(
+    Date.parse(`${day}T00:00:00Z`) + 86_400_000
+  )
+    .toISOString()
+    .slice(0, 10);
+}
+
 function TaskRow({
   task,
   project,
@@ -65,6 +86,7 @@ function TaskRow({
     task.status === "CANCELLED";
 
   const due = task.dueAt?.slice(0, 10);
+  const tomorrow = nextDay(today);
 
   const overdue =
     due && due < today && !closed;
@@ -72,19 +94,21 @@ function TaskRow({
   const dateLabel =
     due === today
       ? "Today"
-      : due
-        ? new Intl.DateTimeFormat("en", {
-            month: "short",
-            day: "numeric",
-            ...(due.slice(0, 4) !==
-            today.slice(0, 4)
-              ? { year: "numeric" }
-              : {}),
-            timeZone: "UTC",
-          }).format(
-            new Date(`${due}T00:00:00Z`)
-          )
-        : "";
+      : due === tomorrow
+        ? "Tomorrow"
+        : due
+          ? new Intl.DateTimeFormat("en", {
+              month: "short",
+              day: "numeric",
+              ...(due.slice(0, 4) !==
+              today.slice(0, 4)
+                ? { year: "numeric" }
+                : {}),
+              timeZone: "UTC",
+            }).format(
+              new Date(`${due}T00:00:00Z`)
+            )
+          : "";
 
   const completedSubtasks =
     task.subtasks?.filter(
@@ -93,6 +117,12 @@ function TaskRow({
 
   const totalSubtasks =
     task.subtasks?.length ?? 0;
+
+  const showProgress =
+    !closed &&
+    typeof task.progress === "number" &&
+    task.progress > 0 &&
+    task.progress < 100;
 
   function toggleTaskStatus() {
     const data = new FormData();
@@ -112,12 +142,28 @@ function TaskRow({
     );
   }
 
+  const accent = !closed
+    ? PRIORITY_ACCENT[task.priority]
+    : undefined;
+
   return (
-    <li className="group min-w-0 border-b border-border/55 last:border-0">
+    <li className="min-w-0">
       <div
-        className="flex min-w-0 items-start gap-1 rounded-lg py-1 transition-colors hover:bg-muted/45 sm:gap-2"
+        className="group relative flex min-w-0 items-start gap-1 overflow-hidden rounded-xl border border-border/60 bg-card/50 py-1 pl-2 pr-1 transition-all duration-200 hover:border-primary/30 hover:bg-card hover:shadow-sm sm:gap-2 sm:pl-3"
         aria-busy={pending}
       >
+        {/* PRIORITY ACCENT BAR */}
+        {accent && (
+          <span
+            aria-hidden="true"
+            className={cn(
+              "absolute inset-y-2 left-0 w-[3px] rounded-full",
+              accent,
+              pending && "opacity-50"
+            )}
+          />
+        )}
+
         {/* COMPLETE / REOPEN */}
         <button
           type="button"
@@ -130,9 +176,10 @@ function TaskRow({
         >
           <span
             className={cn(
-              "flex size-[19px] items-center justify-center rounded-full border-[1.5px] border-muted-foreground/50 transition-colors group-hover:border-foreground",
-              closed &&
-                "border-muted-foreground/30 bg-muted text-muted-foreground",
+              "flex size-[19px] items-center justify-center rounded-full border-[1.5px] transition-all duration-200",
+              closed
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-muted-foreground/50 group-hover:scale-110 group-hover:border-foreground",
               !closed &&
                 task.priority === "URGENT" &&
                 "border-red-600 dark:border-red-400",
@@ -166,33 +213,56 @@ function TaskRow({
         >
           <span
             className={cn(
-              "block text-sm leading-6 wrap-break-word sm:text-[15px]",
-              closed &&
-                "text-muted-foreground line-through decoration-muted-foreground/50"
+              "block text-sm leading-6 wrap-break-word transition-colors sm:text-[15px]",
+              closed
+                ? "text-muted-foreground line-through decoration-muted-foreground/50"
+                : "font-medium"
             )}
           >
             {task.title}
           </span>
 
-          {/* TASK METADATA */}
-          <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs leading-5 text-muted-foreground">
+          {/* PROGRESS BAR */}
+          {showProgress && (
+            <span className="mt-1.5 flex items-center gap-2">
+              <span className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+                <span
+                  className="block h-full rounded-full bg-primary transition-[width] duration-500"
+                  style={{
+                    width: `${task.progress}%`,
+                  }}
+                />
+              </span>
+              <span className="text-[10px] font-semibold tabular-nums text-muted-foreground">
+                {task.progress}%
+              </span>
+            </span>
+          )}
+
+          {/* TASK METADATA CHIPS */}
+          <span className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 text-xs leading-5 text-muted-foreground">
             {task.status === "IN_PROGRESS" && (
-              <span className="inline-flex items-center gap-1 text-blue-700 dark:text-blue-300">
-                <CircleDashed className="size-3" />
+              <span className={cn(chipClass, "bg-blue-500/10 text-blue-700 dark:text-blue-300")}>
+                <CircleDashed className="size-3" aria-hidden="true" />
                 In progress
               </span>
             )}
 
             {task.status === "CANCELLED" && (
-              <span>Cancelled</span>
+              <span className={cn(chipClass, "bg-muted text-muted-foreground")}>
+                Cancelled
+              </span>
             )}
 
             {due && (
               <span
                 className={cn(
-                  "inline-flex items-center gap-1",
-                  overdue &&
-                    "text-red-700 dark:text-red-300"
+                  chipClass,
+                  overdue
+                    ? "bg-red-500/10 text-red-700 dark:text-red-300"
+                    : due === today
+                      ? "bg-sky-500/10 text-sky-700 dark:text-sky-300"
+                      : "bg-muted text-muted-foreground"
                 )}
               >
                 <CalendarDays
@@ -211,10 +281,10 @@ function TaskRow({
               task.priority === "URGENT") && (
               <span
                 className={cn(
-                  "inline-flex items-center gap-1",
+                  chipClass,
                   task.priority === "URGENT"
-                    ? "text-red-700 dark:text-red-300"
-                    : "text-amber-700 dark:text-amber-300"
+                    ? "bg-red-500/10 text-red-700 dark:text-red-300"
+                    : "bg-amber-500/10 text-amber-700 dark:text-amber-300"
                 )}
               >
                 <Flag
@@ -228,25 +298,54 @@ function TaskRow({
               </span>
             )}
 
-            {view === "all" && (
-              <span className="max-w-full truncate">
-                {project?.name ?? "Inbox"}
+            {!closed && task.difficulty === "HARD" && (
+              <span className={cn(chipClass, "bg-muted text-muted-foreground")}>
+                <Mountain className="size-3" aria-hidden="true" />
+                Hard
+              </span>
+            )}
 
-                {project?.isArchived
-                  ? " · Archived"
-                  : ""}
+            {!closed &&
+              typeof task.estimatedMinutes === "number" && (
+                <span className={cn(chipClass, "bg-muted text-muted-foreground")}>
+                  <Clock3 className="size-3" aria-hidden="true" />
+                  {task.estimatedMinutes >= 60
+                    ? `${Math.round(task.estimatedMinutes / 60)}h${
+                        task.estimatedMinutes % 60
+                          ? ` ${task.estimatedMinutes % 60}m`
+                          : ""
+                      }`
+                    : `${task.estimatedMinutes}m`}
+                </span>
+              )}
+
+            {!closed && task.dependsOnTitle && (
+              <span className={cn(chipClass, "max-w-56 bg-muted text-muted-foreground")}>
+                <Link2 className="size-3 shrink-0" aria-hidden="true" />
+                <span className="truncate">after: {task.dependsOnTitle}</span>
+              </span>
+            )}
+
+            {view === "all" && (
+              <span className={cn(chipClass, "max-w-full bg-muted/60 text-muted-foreground")}>
+                <span className="truncate">
+                  {project?.name ?? "Inbox"}
+
+                  {project?.isArchived
+                    ? " · Archived"
+                    : ""}
+                </span>
               </span>
             )}
 
             {totalSubtasks > 0 && (
-              <span className="inline-flex items-center gap-1">
+              <span className={cn(chipClass, "bg-muted text-muted-foreground")}>
                 <Check
                   className="size-3"
                   aria-hidden="true"
                 />
 
                 {completedSubtasks}/{totalSubtasks}
-                {" "}subtasks
               </span>
             )}
           </span>
@@ -292,7 +391,7 @@ export function TaskList({
   return (
     <ul
       aria-label={label}
-      className="min-w-0"
+      className="min-w-0 space-y-2"
     >
       {sortedTasks.map((task) => (
         <TaskRow

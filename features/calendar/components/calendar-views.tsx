@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -64,6 +65,20 @@ function longDate(day: string): string {
     year: "numeric",
     timeZone: "UTC",
   }).format(new Date(`${day}T00:00:00Z`));
+}
+
+// Assembled from parts so the day always precedes the month ("25 October").
+function headingParts(day: string, withYear: boolean): string {
+  const parts = new Intl.DateTimeFormat("en", {
+    weekday: withYear ? undefined : "long",
+    day: "numeric",
+    month: "long",
+    ...(withYear ? { year: "numeric" } : {}),
+    timeZone: "UTC",
+  }).formatToParts(new Date(`${day}T00:00:00Z`));
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  const weekday = get("weekday") ? `${get("weekday")}, ` : "";
+  return `${weekday}${get("day")} ${get("month")}${withYear ? ` ${get("year")}` : ""}`;
 }
 
 // An event overlaps [dayStart, nextDayStart). For all-day events,
@@ -167,12 +182,42 @@ function EventChip({
       data-kind={event.kind}
       aria-label={`View event: ${event.title}`}
       onClick={() => onSelect(event)}
-      className="block w-full min-w-0 rounded-md border data-[kind=deadline]:border-amber-500 data-[kind=deadline]:bg-amber-500/15 data-[kind=planner]:border-emerald-500 data-[kind=planner]:bg-emerald-500/15 data-[kind=block]:border-violet-500 data-[kind=block]:bg-violet-500/15 data-[kind=google]:border-sky-500 data-[kind=google]:bg-sky-500/15 border-primary/25 bg-primary/10 px-1.5 py-1 text-left text-xs text-foreground outline-none hover:bg-primary/20 focus-visible:ring-2 focus-visible:ring-ring"
+      className="block w-full min-w-0 rounded-md border data-[kind=deadline]:border-amber-500 data-[kind=deadline]:bg-amber-500/15 data-[kind=planner]:border-emerald-500 data-[kind=planner]:bg-emerald-500/15 data-[kind=block]:border-violet-500 data-[kind=block]:bg-violet-500/15 data-[kind=google]:border-sky-500 data-[kind=google]:bg-sky-500/15 border-primary/25 bg-primary/10 px-1.5 py-1 text-left text-xs text-foreground outline-none transition-all hover:scale-[1.02] hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring"
     >
       <span className="block truncate font-medium">
         {!compact && `${eventLabel(event, timezone)} · `}{event.title}
       </span>
     </button>
+  );
+}
+
+/** Minutes since local midnight right now, ticking every minute; null off-today. */
+function useNowMinutes(day: string, today: string, timezone: CalendarTimezone): number | null {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  if (day !== today) return null;
+  const midnight = parseCalendarLocal(`${day}T00:00`, timezone);
+  if (!midnight) return null;
+  const minutes = (now - midnight.getTime()) / 60_000;
+  return minutes >= 0 && minutes < 1440 ? minutes : null;
+}
+
+function NowLine({ minutes }: { minutes: number }) {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-x-0 z-20"
+      style={{ top: (minutes / 60) * HOUR_HEIGHT }}
+    >
+      <div className="relative border-t-2 border-red-500">
+        <span className="absolute -top-[5px] left-0 size-2.5 rounded-full bg-red-500 shadow" />
+      </div>
+    </div>
   );
 }
 
@@ -193,7 +238,7 @@ function MonthGrid({
   const days = Array.from({ length: 35 }, (_, i) => addDays(first, i));
 
   return (
-    <div className="overflow-x-auto rounded-xl border bg-card">
+    <div className="overflow-x-auto rounded-2xl border bg-card shadow-sm">
       <div className="min-w-[700px]">
         <div className="grid grid-cols-7 border-b bg-muted/40">
           {weekdayLabels.map((name) => (
@@ -205,15 +250,19 @@ function MonthGrid({
         <div className="grid grid-cols-7">
           {days.map((day) => {
             const daily = events.filter((event) => occursOn(event, day, timezone));
+            const inMonth = day.slice(0, 7) === month;
+            const isToday = day === today;
             return (
               <div
                 key={day}
-                className={`min-h-32 border-b border-r p-1.5 sm:min-h-36 ${day.slice(0, 7) !== month ? "bg-muted/25" : ""}`}
+                className={`min-h-32 border-b border-r p-1.5 transition-colors sm:min-h-36 ${
+                  inMonth ? "" : "bg-muted/25"
+                } ${isToday ? "bg-primary/5 ring-1 ring-inset ring-primary/25" : "hover:bg-muted/30"}`}
               >
                 <Link
                   href={calendarHref("day", day)}
                   aria-label={`Open ${longDate(day)} in day view`}
-                  className={`mb-1 inline-flex size-8 items-center justify-center rounded-full text-xs font-semibold hover:bg-muted ${day === today ? "bg-primary text-primary-foreground hover:bg-primary/90" : ""}`}
+                  className={`mb-1 inline-flex size-8 items-center justify-center rounded-full text-xs font-semibold transition-colors hover:bg-muted ${isToday ? "bg-primary text-primary-foreground hover:bg-primary/90" : ""} ${inMonth ? "" : "text-muted-foreground/60"}`}
                 >
                   {Number(day.slice(8))}
                 </Link>
@@ -229,7 +278,7 @@ function MonthGrid({
                   {daily.length > 3 && (
                     <Link
                       href={calendarHref("day", day)}
-                      className="block px-1 text-xs font-medium text-primary hover:underline"
+                      className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-primary transition-colors hover:bg-primary/10"
                     >
                       +{daily.length - 3} more
                     </Link>
@@ -258,68 +307,113 @@ function TimeGrid({
   onSelect: (event: CalendarEventView) => void;
 }) {
   const gridColumns = `64px repeat(${days.length}, minmax(0, 1fr))`;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const includesToday = days.includes(today);
+
+  // Jump to the current hour (or early morning) when the view changes.
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+    const midnight = parseCalendarLocal(`${today}T00:00`, timezone);
+    const minutes = includesToday && midnight
+      ? Math.max(0, (Date.now() - midnight.getTime()) / 60_000 - 150)
+      : 7 * 60;
+    element.scrollTop = Math.max(0, (minutes / 60) * HOUR_HEIGHT - 24);
+  }, [includesToday, today, timezone]);
 
   return (
-    <div className="overflow-x-auto rounded-xl border bg-card">
-      <div className={days.length === 7 ? "min-w-[940px]" : "min-w-[320px]"}>
-        <div className="grid" style={{ gridTemplateColumns: gridColumns }}>
-          <div className="border-b bg-muted/30" />
-          {days.map((day) => (
-            <Link
-              key={day}
-              href={calendarHref("day", day)}
-              className={`border-b border-l px-2 py-3 text-center text-sm font-semibold hover:bg-muted/50 ${day === today ? "text-primary" : ""}`}
-            >
-              {shortDate(day)}
-              <span className="ml-1 text-xs text-muted-foreground">
-                {weekdayLabels[(new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7]}
-              </span>
-            </Link>
-          ))}
-          <div className="border-b bg-muted/30 px-1 py-2 text-center text-[10px] text-muted-foreground">All day</div>
-          {days.map((day) => (
-            <div key={`all-${day}`} className="min-h-12 space-y-1 border-b border-l p-1">
-              {events.filter((event) => event.isAllDay && occursOn(event, day, timezone)).map((event) => (
-                <EventChip key={event.id} event={event} timezone={timezone} onSelect={onSelect} compact />
-              ))}
-            </div>
-          ))}
-          <div className="bg-muted/20">
-            {hours.map((hour) => (
-              <div key={hour} className="h-12 border-b pr-2 pt-1 text-right text-[10px] text-muted-foreground">
-                {String(hour).padStart(2, "0")}:00
-              </div>
+    <div className="rounded-2xl border bg-card shadow-sm">
+      <div ref={scrollRef} className="max-h-[72vh] overflow-auto">
+        <div className={days.length === 7 ? "min-w-[940px]" : "min-w-[320px]"}>
+          <div className="sticky top-0 z-10 grid bg-card/95 backdrop-blur-sm" style={{ gridTemplateColumns: gridColumns }}>
+            <div className="border-b bg-muted/30" />
+            {days.map((day) => (
+              <Link
+                key={day}
+                href={calendarHref("day", day)}
+                className={`border-b border-l px-2 py-3 text-center text-sm font-semibold transition-colors hover:bg-muted/50 ${day === today ? "text-primary" : ""}`}
+              >
+                {shortDate(day)}
+                <span className="ml-1 text-xs text-muted-foreground">
+                  {weekdayLabels[(new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7]}
+                </span>
+              </Link>
             ))}
           </div>
-          {days.map((day) => (
-            <div key={`timeline-${day}`} className="relative border-l" style={{ height: 24 * HOUR_HEIGHT }}>
+          <div className="grid" style={{ gridTemplateColumns: gridColumns }}>
+            <div className="border-b bg-muted/30 px-1 py-2 text-center text-[10px] text-muted-foreground">All day</div>
+            {days.map((day) => (
+              <div key={`all-${day}`} className="min-h-12 space-y-1 border-b border-l p-1">
+                {events.filter((event) => event.isAllDay && occursOn(event, day, timezone)).map((event) => (
+                  <EventChip key={event.id} event={event} timezone={timezone} onSelect={onSelect} compact />
+                ))}
+              </div>
+            ))}
+            <div className="bg-muted/20">
               {hours.map((hour) => (
-                <div key={hour} className="h-12 border-b border-border/60" />
-              ))}
-              {timedSegments(events, day, timezone).map(({ event, start, end, lane, laneCount }) => (
-                <button
-                  key={event.id}
-                  type="button"
-                  title={`${event.title} · ${eventLabel(event, timezone)}`}
-                  aria-label={`View event: ${event.title}`}
-                  onClick={() => onSelect(event)}
-                  data-kind={event.kind}
-                  className="data-[kind=deadline]:border-amber-500 data-[kind=deadline]:bg-amber-500/20 data-[kind=block]:border-violet-500 data-[kind=block]:bg-violet-500/20 data-[kind=google]:border-sky-500 data-[kind=google]:bg-sky-500/20 absolute z-10 overflow-hidden rounded-md border border-primary/35 bg-primary/15 px-1 py-0.5 text-left text-[11px] leading-tight text-foreground outline-none hover:bg-primary/25 focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-ring"
-                  style={{
-                    top: (start / 60) * HOUR_HEIGHT,
-                    height: Math.max(20, ((end - start) / 60) * HOUR_HEIGHT),
-                    left: `calc(${(lane / laneCount) * 100}% + 2px)`,
-                    width: `calc(${100 / laneCount}% - 4px)`,
-                  }}
-                >
-                  <span className="block truncate font-semibold">{event.title}</span>
-                  <span className="block truncate">{eventLabel(event, timezone)} – {formatCalendarLocal(event.endsAt, timezone).slice(11, 16)}</span>
-                </button>
+                <div key={hour} className="h-12 border-b pr-2 pt-1 text-right text-[10px] text-muted-foreground">
+                  {String(hour).padStart(2, "0")}:00
+                </div>
               ))}
             </div>
-          ))}
+            {days.map((day) => (
+              <DayColumn
+                key={`timeline-${day}`}
+                day={day}
+                today={today}
+                timezone={timezone}
+                events={events}
+                onSelect={onSelect}
+              />
+            ))}
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function DayColumn({
+  day,
+  today,
+  timezone,
+  events,
+  onSelect,
+}: {
+  day: string;
+  today: string;
+  timezone: CalendarTimezone;
+  events: CalendarEventView[];
+  onSelect: (event: CalendarEventView) => void;
+}) {
+  const nowMinutes = useNowMinutes(day, today, timezone);
+
+  return (
+    <div className="relative border-l" style={{ height: 24 * HOUR_HEIGHT }}>
+      {hours.map((hour) => (
+        <div key={hour} className="h-12 border-b border-border/60" />
+      ))}
+      {nowMinutes !== null && <NowLine minutes={nowMinutes} />}
+      {timedSegments(events, day, timezone).map(({ event, start, end, lane, laneCount }) => (
+        <button
+          key={event.id}
+          type="button"
+          title={`${event.title} · ${eventLabel(event, timezone)}`}
+          aria-label={`View event: ${event.title}`}
+          onClick={() => onSelect(event)}
+          data-kind={event.kind}
+          className="data-[kind=deadline]:border-amber-500 data-[kind=deadline]:bg-amber-500/20 data-[kind=block]:border-violet-500 data-[kind=block]:bg-violet-500/20 data-[kind=google]:border-sky-500 data-[kind=google]:bg-sky-500/20 absolute z-10 overflow-hidden rounded-md border border-primary/35 bg-primary/15 px-1 py-0.5 text-left text-[11px] leading-tight text-foreground outline-none transition-all hover:scale-[1.02] hover:shadow-md hover:bg-primary/25 focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-ring"
+          style={{
+            top: (start / 60) * HOUR_HEIGHT,
+            height: Math.max(20, ((end - start) / 60) * HOUR_HEIGHT),
+            left: `calc(${(lane / laneCount) * 100}% + 2px)`,
+            width: `calc(${100 / laneCount}% - 4px)`,
+          }}
+        >
+          <span className="block truncate font-semibold">{event.title}</span>
+          <span className="block truncate">{eventLabel(event, timezone)} – {formatCalendarLocal(event.endsAt, timezone).slice(11, 16)}</span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -350,29 +444,20 @@ export function CalendarViews({
     ? new Intl.DateTimeFormat("en", { month: "long", year: "numeric", timeZone: "UTC" })
         .format(new Date(`${month}-01T00:00:00Z`))
     : view === "week"
-      ? `${shortDate(weekStart)} – ${shortDate(addDays(weekStart, 6))}`
-      : longDate(selectedDate);
+      ? `${headingParts(weekStart, false)} – ${headingParts(addDays(weekStart, 6), false)}`
+      : headingParts(selectedDate, true);
 
   return (
     <section aria-label="Visual calendar" className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4">
-        <div className="flex items-center gap-2">
-          <CalendarDays aria-hidden="true" className="size-5 text-primary" />
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-card p-3 shadow-sm sm:p-4">
+        <div className="flex items-center gap-2.5">
+          <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10">
+            <CalendarDays aria-hidden="true" className="size-5 text-primary" />
+          </span>
           <h2 className="text-base font-semibold sm:text-lg">{heading}</h2>
         </div>
+
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-lg border p-0.5" aria-label="Calendar display mode">
-            {(["month", "week", "day"] as const).map((mode) => (
-              <Link
-                key={mode}
-                href={calendarHref(mode, selectedDate)}
-                aria-current={view === mode ? "page" : undefined}
-                className={`rounded-md px-3 py-2 text-xs font-medium capitalize ${view === mode ? "bg-secondary text-secondary-foreground" : "hover:bg-muted"}`}
-              >
-                {mode}
-              </Link>
-            ))}
-          </div>
           <input
             type="date"
             aria-label="Go to date"
@@ -382,17 +467,43 @@ export function CalendarViews({
             onChange={(event) => {
               if (isCalendarDay(event.target.value)) router.push(calendarHref(view, event.target.value));
             }}
-            className="min-h-10 rounded-lg border bg-background px-2 text-xs"
+            className="min-h-10 rounded-lg border bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
-          <Link href={calendarHref(view, today)} className="rounded-lg border px-3 py-2 text-xs font-medium hover:bg-muted">
-            Today
-          </Link>
-          <Link href={calendarHref(view, isCalendarDay(previous) ? previous : selectedDate)} aria-disabled={!isCalendarDay(previous)} aria-label={`Previous ${view}`} className="flex size-10 items-center justify-center rounded-lg border hover:bg-muted">
-            <ChevronLeft className="size-4" />
-          </Link>
-          <Link href={calendarHref(view, isCalendarDay(next) ? next : selectedDate)} aria-disabled={!isCalendarDay(next)} aria-label={`Next ${view}`} className="flex size-10 items-center justify-center rounded-lg border hover:bg-muted">
-            <ChevronRight className="size-4" />
-          </Link>
+
+          <div className="flex rounded-lg border p-0.5" aria-label="Calendar display mode">
+            {(["month", "week", "day"] as const).map((mode) => (
+              <Link
+                key={mode}
+                href={calendarHref(mode, selectedDate)}
+                aria-current={view === mode ? "page" : undefined}
+                className={`rounded-md px-3 py-2 text-xs font-medium capitalize transition-colors ${view === mode ? "bg-secondary text-secondary-foreground" : "hover:bg-muted"}`}
+              >
+                {mode}
+              </Link>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1">
+            <Link href={calendarHref(view, today)} className="rounded-lg border px-3 py-2 text-xs font-medium transition-colors hover:bg-muted">
+              Today
+            </Link>
+            <Link
+              href={calendarHref(view, isCalendarDay(previous) ? previous : selectedDate)}
+              aria-disabled={!isCalendarDay(previous)}
+              aria-label={`Previous ${view}`}
+              className="flex size-10 items-center justify-center rounded-lg border transition-colors hover:bg-muted"
+            >
+              <ChevronLeft className="size-4" />
+            </Link>
+            <Link
+              href={calendarHref(view, isCalendarDay(next) ? next : selectedDate)}
+              aria-disabled={!isCalendarDay(next)}
+              aria-label={`Next ${view}`}
+              className="flex size-10 items-center justify-center rounded-lg border transition-colors hover:bg-muted"
+            >
+              <ChevronRight className="size-4" />
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -402,13 +513,15 @@ export function CalendarViews({
         </p>
       )}
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-primary/60" aria-hidden />Event</span>
-        <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-amber-500" aria-hidden />Task deadline</span>
-        <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-emerald-500" aria-hidden />Daily plan</span>
-        <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-violet-500" aria-hidden />Time block</span>
-        <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-sky-500" aria-hidden />From Google</span>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5 rounded-full border px-2.5 py-1"><span className="size-2 rounded-full bg-primary/60" aria-hidden />Event</span>
+        <span className="flex items-center gap-1.5 rounded-full border px-2.5 py-1"><span className="size-2 rounded-full bg-amber-500" aria-hidden />Task deadline</span>
+        <span className="flex items-center gap-1.5 rounded-full border px-2.5 py-1"><span className="size-2 rounded-full bg-emerald-500" aria-hidden />Daily plan</span>
+        <span className="flex items-center gap-1.5 rounded-full border px-2.5 py-1"><span className="size-2 rounded-full bg-violet-500" aria-hidden />Time block</span>
+        <span className="flex items-center gap-1.5 rounded-full border px-2.5 py-1"><span className="size-2 rounded-full bg-sky-500" aria-hidden />From Google</span>
+        <span className="flex items-center gap-1.5 rounded-full border px-2.5 py-1"><span className="size-2 rounded-full bg-red-500" aria-hidden />Current time</span>
       </div>
+
       {events.length === 0 && <p role="status" className="rounded-lg border p-4 text-sm text-muted-foreground">No events, deadlines or plans in this period.</p>}
       {view === "month" ? (
         <MonthGrid month={month} today={today} timezone={timezone} events={events} onSelect={(event) => onSelectEvent?.(event)} />

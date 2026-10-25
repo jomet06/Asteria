@@ -765,3 +765,24 @@
     @apply font-sans;
   }
 }
+
+/* Landing page motion */
+@keyframes landing-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-landing-float {
+  animation: landing-float 7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}

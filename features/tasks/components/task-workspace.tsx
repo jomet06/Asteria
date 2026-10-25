@@ -167,6 +167,18 @@ export function TaskWorkspace({
       task.status === "CANCELLED"
   );
 
+  const scopedTotal = scopedTasks.length;
+
+  const scopedClosed = scopedTasks.filter(
+    (task) =>
+      task.status === "DONE" ||
+      task.status === "CANCELLED"
+  ).length;
+
+  const completionPercent = scopedTotal
+    ? Math.round((scopedClosed / scopedTotal) * 100)
+    : 0;
+
   // ========================================
   // WORKSPACE STATE
   // ========================================
@@ -482,6 +494,21 @@ export function TaskWorkspace({
             )}
           </p>
 
+          {/* COMPLETION PROGRESS */}
+          {scopedTotal > 0 && (
+            <div className="mt-4 flex max-w-md items-center gap-3">
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-primary transition-all duration-500"
+                  style={{ width: `${completionPercent}%` }}
+                />
+              </div>
+              <span className="shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
+                {scopedClosed}/{scopedTotal} done
+              </span>
+            </div>
+          )}
+
           {project?.description && (
             <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground wrap-break-word">
               {project.description}
@@ -548,9 +575,11 @@ export function TaskWorkspace({
 
         {active.length > 0 && (
           <>
-            <div className="mb-2 flex items-center justify-between px-1 text-xs font-medium text-muted-foreground">
+            <div className="mb-3 flex items-center justify-between px-1 text-xs font-medium text-muted-foreground">
               <h2>To do</h2>
-              <span>{active.length}</span>
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold tabular-nums">
+                {active.length}
+              </span>
             </div>
 
             <TaskList

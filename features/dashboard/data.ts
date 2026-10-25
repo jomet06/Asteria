@@ -5,6 +5,7 @@ import {
   formatCalendarLocal,
   parseCalendarLocal,
   readCalendarTimezone,
+  type CalendarTimezone,
 } from "@/features/calendar/date-time";
 
 const DAY_MS = 86_400_000;
@@ -34,7 +35,7 @@ export type DashboardTask = {
 };
 
 export type DashboardOverview = {
-  timezone: string;
+  timezone: CalendarTimezone;
   today: string;
   todayLabel: string;
   now: string;
