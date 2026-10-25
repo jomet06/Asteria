@@ -1,3 +1,5 @@
+> **Historical status note (added 2026-10-25):** This M3 report preserves the migration state at the time it was written. The later [notification-system report](notification-system.md) records that all 12 migrations were applied and verified in its audited environment on 2026-10-25. Do not treat the "migration pending" section below as the current status of every deployment; check the target database with `npx prisma migrate status --config prisma7.config.ts`.
+
 # Internal Calendar M3
 
 ## File inventory
