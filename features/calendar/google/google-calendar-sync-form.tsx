@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useState } from "react";
+import { useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { syncGoogleCalendars } from "./import-actions";
 
@@ -13,6 +14,13 @@ type Source = {
   syncStatus: string;
   lastSuccessfulSync: Date | null;
 };
+
+function SyncSubmit({ count }: { count: number }) {
+  const { pending } = useFormStatus();
+  return <Button type="submit" disabled={pending || count === 0 || count > 3} aria-busy={pending}>
+    {pending ? "Syncing…" : "Sync Now"}
+  </Button>;
+}
 
 export function GoogleCalendarSyncForm({ sources }: { sources: Source[] }) {
   const [selected, setSelected] = useState(
@@ -54,7 +62,8 @@ export function GoogleCalendarSyncForm({ sources }: { sources: Source[] }) {
           );
         })}
       </div>
-      <Button type="submit" disabled={selected.size === 0}>Sync Now</Button>
+      {selected.size > 3 && <p role="alert" className="text-sm text-destructive">Select at most three calendars before syncing.</p>}
+      <SyncSubmit count={selected.size} />
       {sources.some((source) => source.lastSuccessfulSync) && (
         <p className="text-xs text-muted-foreground">
           Last sync: {sources.find((source) => source.lastSuccessfulSync)?.lastSuccessfulSync?.toLocaleString()}

@@ -2,23 +2,13 @@
 
 import { getGoogleOAuthConfig } from "./config";
 import { decryptGoogleRefreshToken } from "./crypto";
-
-export type NormalizedGoogleEvent = {
-  googleEventId: string;
-  title: string;
-  description: string | null;
-  location: string | null;
-  startsAt: Date;
-  endsAt: Date;
-  timezone: string;
-  isAllDay: boolean;
-  htmlLink: string | null;
-  googleUpdatedAt: Date | null;
-};
+import { GoogleImportError, normalizeGoogleEvent, readGooglePage, type NormalizedGoogleEvent } from "./import-validation";
+export type { NormalizedGoogleEvent } from "./import-validation";
 
 function oauthClient(refreshToken: string) {
   const { clientId, clientSecret, redirectUri } = getGoogleOAuthConfig();
   const client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+  client.transporter.defaults = { ...client.transporter.defaults, timeout: 15_000, retry: false };
   client.setCredentials({ refresh_token: refreshToken });
   return client;
 }
@@ -40,12 +30,6 @@ export async function listGoogleCalendars(api: calendar_v3.Calendar) {
   return calendars.filter((item) => typeof item.id === "string" && typeof item.summary === "string");
 }
 
-function eventDate(value: string | null | undefined, fallback: string): Date {
-  const parsed = new Date(value ?? fallback);
-  if (Number.isNaN(parsed.getTime())) throw new Error("Google returned an invalid event date.");
-  return parsed;
-}
-
 export async function listGoogleEvents(
   api: calendar_v3.Calendar,
   calendarId: string,
@@ -53,7 +37,13 @@ export async function listGoogleEvents(
   to: Date,
   maxEvents = 2500,
 ) {
-  const result: NormalizedGoogleEvent[] = [];
+  if (!Number.isInteger(maxEvents) || maxEvents < 1 || maxEvents > 2500 ||
+      !Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from >= to) {
+    throw new GoogleImportError("invalid_google_data");
+  }
+  const result = new Map<string, NormalizedGoogleEvent>();
+  const seenPages = new Set<string>();
+  let received = 0;
   let pageToken: string | undefined;
   do {
     const response = await api.events.list({
@@ -63,35 +53,26 @@ export async function listGoogleEvents(
       singleEvents: true,
       orderBy: "startTime",
       showDeleted: true,
-      maxResults: Math.min(250, maxEvents - result.length),
+      maxResults: Math.min(250, maxEvents - received),
       pageToken,
-    });
-    for (const item of response.data.items ?? []) {
-      if (!item.id) continue;
-      if (item.status === "cancelled") continue;
-      const allDay = Boolean(item.start?.date && item.end?.date);
-      const startsAt = allDay
-        ? eventDate(item.start?.date, from.toISOString())
-        : eventDate(item.start?.dateTime, from.toISOString());
-      const endsAt = allDay
-        ? eventDate(item.end?.date, to.toISOString())
-        : eventDate(item.end?.dateTime, to.toISOString());
-      result.push({
-        googleEventId: item.id,
-        title: item.summary?.trim() || "(Untitled event)",
-        description: item.description ?? null,
-        location: item.location ?? null,
-        startsAt,
-        endsAt,
-        timezone: item.start?.timeZone ?? item.end?.timeZone ?? "UTC",
-        isAllDay: allDay,
-        htmlLink: item.htmlLink ?? null,
-        googleUpdatedAt: item.updated ? new Date(item.updated) : null,
-      });
-      if (result.length >= maxEvents) return { events: result, truncated: Boolean(response.data.nextPageToken) };
+    }, { timeout: 15_000, retry: false });
+    const page = readGooglePage(response.data);
+    received += page.items.length;
+    if (received > maxEvents || (received === maxEvents && page.nextPageToken)) {
+      return { events: [], truncated: true };
     }
-    pageToken = response.data.nextPageToken ?? undefined;
+    for (const item of page.items) {
+      const event = normalizeGoogleEvent(item);
+      if (!event) continue;
+      if (result.has(event.googleEventId)) throw new GoogleImportError("invalid_google_data");
+      result.set(event.googleEventId, event);
+    }
+    pageToken = page.nextPageToken;
+    if (pageToken) {
+      if (seenPages.has(pageToken) || seenPages.size >= 100) throw new GoogleImportError("invalid_google_data");
+      seenPages.add(pageToken);
+    }
   } while (pageToken);
-  return { events: result, truncated: false };
+  return { events: [...result.values()], truncated: false };
 }
 

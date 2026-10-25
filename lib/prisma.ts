@@ -24,6 +24,9 @@ const schemaSignature = JSON.stringify({
   googleCalendarConnection: Prisma.GoogleCalendarConnectionScalarFieldEnum,
   googleCalendarSource: Prisma.GoogleCalendarSourceScalarFieldEnum,
   googleEventMirror: Prisma.GoogleEventMirrorScalarFieldEnum,
+  discordConnection: Prisma.DiscordConnectionScalarFieldEnum,
+  discordLinkCode: Prisma.DiscordLinkCodeScalarFieldEnum,
+  notificationLog: Prisma.NotificationLogScalarFieldEnum,
 });
 
 const cachedClient =

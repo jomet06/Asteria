@@ -24,6 +24,10 @@ import {
   syncPendingEventsToGoogle,
 } from "@/features/calendar/google/import-actions";
 import { GoogleCalendarSyncForm } from "@/features/calendar/google/google-calendar-sync-form";
+import { discordConfigured } from "@/features/discord/config";
+import { getMyDiscordConnection } from "@/features/discord/data";
+import { disconnectDiscordAction } from "@/features/discord/actions";
+import { DiscordConnectForm } from "@/features/discord/components/discord-connect";
 
 export const instant = false;
 
@@ -47,6 +51,10 @@ const googleMessages: Record<string, string> = {
   calendars_loaded: "Google calendars loaded. Select up to three calendars and sync them.",
   no_calendars_selected: "Select at least one calendar before syncing.",
   invalid_calendars: "One or more selected calendars are no longer available.",
+  too_many_calendars: "Select at most three calendars. Nothing was synced; please reduce your selection.",
+  invalid_google_data: "Google returned incomplete or invalid event data. Existing imported events were preserved. Please retry.",
+  sync_busy: "Another sync is running or has replaced this attempt. Please wait, then retry. No older snapshot was written.",
+  connection_changed: "Your Google connection changed or was disconnected. Reload Settings before syncing again.",
   sync_truncated: "Google returned more than the safe event limit. Existing imported events were preserved.",
   sync_failed: "Google Calendar sync failed. Existing imported events were left unchanged.",
   synced: "Google Calendar sync completed successfully.",
@@ -72,6 +80,7 @@ export default async function SettingsPage({
     ? hasGoogleWriteScopes(googleConnection.grantedScopes)
     : false;
   const canConnectGoogle = googleCalendarConfigured();
+  const discordConnection = discordConfigured() ? await getMyDiscordConnection() : null;
   const googleMessage =
     typeof google === "string" && Object.hasOwn(googleMessages, google)
       ? googleMessages[google]
@@ -208,6 +217,49 @@ export default async function SettingsPage({
                     Connect Google Calendar
                   </Button>
                 </form>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="max-w-2xl">
+          <CardHeader>
+            <CardTitle>Discord</CardTitle>
+            <CardDescription>
+              Chat with Hermes from Discord and receive your reminders —
+              upcoming events, deadlines, overdue tasks, and your daily plan.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!discordConfigured() ? (
+              <p className="text-sm text-muted-foreground">
+                The bot is not configured on this server. Set DISCORD_BOT_TOKEN
+                and DISCORD_INTERNAL_SECRET in .env.local, run{" "}
+                <code className="rounded bg-muted px-1.5 py-0.5 text-xs">npm run bot</code>,
+                then reload this page.
+              </p>
+            ) : discordConnection ? (
+              <>
+                <p className="text-sm">
+                  Linked to <strong>{discordConnection.discordUsername}</strong> on Discord.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Reminders are sent to your Discord DMs. Disconnecting removes
+                  the link, not your Asteria data.
+                </p>
+                <form action={disconnectDiscordAction}>
+                  <Button type="submit" variant="outline">
+                    Disconnect Discord
+                  </Button>
+                </form>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Generate a one-time code, then send it to the bot in a
+                  Discord direct message to link this account.
+                </p>
+                <DiscordConnectForm />
               </>
             )}
           </CardContent>

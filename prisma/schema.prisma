@@ -24,6 +24,9 @@ model Profile {
   googleCalendarConnection GoogleCalendarConnection?
   googleCalendarSources    GoogleCalendarSource[]
   googleEventMirrors       GoogleEventMirror[]
+  discordConnection        DiscordConnection?
+  discordLinkCodes         DiscordLinkCode[]
+  notificationLogs         NotificationLog[]
 
   @@map("profiles")
 }
@@ -244,6 +247,53 @@ model GoogleEventMirror {
   @@index([ownerId, startsAt], map: "google_event_mirrors_owner_starts_idx")
   @@index([sourceId, startsAt], map: "google_event_mirrors_source_starts_idx")
   @@map("google_event_mirrors")
+}
+
+// ========================================
+// DISCORD BOT — M4
+// ========================================
+
+model DiscordConnection {
+  ownerId         String   @id @map("owner_id") @db.Uuid
+  discordUserId   String   @unique @map("discord_user_id") @db.VarChar(64)
+  discordUsername String   @map("discord_username") @db.VarChar(120)
+  dmChannelId     String?  @map("dm_channel_id") @db.VarChar(64)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  owner Profile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@map("discord_connections")
+}
+
+model DiscordLinkCode {
+  code      String   @id @db.VarChar(16)
+  ownerId   String   @map("owner_id") @db.Uuid
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  owner Profile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId], map: "discord_link_codes_owner_idx")
+  @@map("discord_link_codes")
+}
+
+// ========================================
+// NOTIFICATION LOG — dedupe for reminders
+// ========================================
+
+model NotificationLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  ownerId   String   @map("owner_id") @db.Uuid
+  kind      String   @db.VarChar(32)
+  refKey    String   @map("ref_key") @db.VarChar(120)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  owner Profile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, kind, refKey], map: "notification_logs_owner_kind_ref_unique")
+  @@index([ownerId, createdAt], map: "notification_logs_owner_created_idx")
+  @@map("notification_logs")
 }
 
 // ========================================
