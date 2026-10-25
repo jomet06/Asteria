@@ -81,6 +81,39 @@ const fieldClass =
   "focus-visible:ring-ring disabled:opacity-50";
 
 const weekdayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const weekdayLongNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+function clock12(instantIso: string, timezone: string): { time: string; meridiem: string } {
+  const parts = new Intl.DateTimeFormat("en", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: timezone,
+  }).formatToParts(new Date(instantIso));
+  const hour = parts.find((part) => part.type === "hour")?.value ?? "";
+  const minute = parts.find((part) => part.type === "minute")?.value ?? "";
+  const meridiem = (parts.find((part) => part.type === "dayPeriod")?.value ?? "").toLowerCase();
+  return { time: `${hour}:${minute}`, meridiem };
+}
+
+function timeRange(startsAt: string, endsAt: string, timezone: string): string {
+  const start = clock12(startsAt, timezone);
+  const end = clock12(endsAt, timezone);
+  // Same half-day keeps one meridiem, Google-style: "7:30 – 10:30am".
+  return start.meridiem === end.meridiem
+    ? `${start.time} – ${end.time}${end.meridiem}`
+    : `${start.time}${start.meridiem} – ${end.time}${end.meridiem}`;
+}
+
+function dayLabel(instantIso: string, timezone: string, style: "long" | "short" = "long"): string {
+  const formatter = new Intl.DateTimeFormat(
+    "en",
+    style === "long"
+      ? { weekday: "long", day: "numeric", month: "long", timeZone: timezone }
+      : { weekday: "short", day: "numeric", month: "short", timeZone: timezone }
+  );
+  return formatter.format(new Date(instantIso));
+}
 
 /** One icon-led form row, matching the layout of a calendar quick editor. */
 function Row({
@@ -104,9 +137,10 @@ function Row({
 function repeatLabel(recurrenceRule: string): string | null {
   const rule = parseRecurrence(recurrenceRule);
   if (!rule) return null;
-  if (rule.frequency === "daily") return "Repeats daily";
-  if (rule.frequency === "monthly") return "Repeats monthly";
-  return `Repeats weekly on ${rule.weekdays.map((day) => weekdayNames[day]).join(", ")}`;
+  if (rule.frequency === "daily") return "Daily";
+  if (rule.frequency === "monthly") return "Monthly";
+  if (!rule.weekdays.length) return "Weekly";
+  return `Weekly on ${rule.weekdays.map((day) => weekdayLongNames[day]).join(", ")}`;
 }
 
 function EventFields({
@@ -471,41 +505,27 @@ function EventFields({
 function eventSchedule(
   item: CalendarEventView
 ): string {
-  const start = formatCalendarLocal(
-    item.startsAt,
-    item.timezone
-  );
+  const timezone = item.timezone;
+  const startDay = formatCalendarLocal(item.startsAt, timezone).slice(0, 10);
+  const endDay = item.isAllDay
+    ? previousAllDayDate(item.endsAt, timezone)
+    : formatCalendarLocal(item.endsAt, timezone).slice(0, 10);
+
+  if (startDay === endDay) {
+    const day = dayLabel(item.startsAt, timezone);
+    return item.isAllDay
+      ? `${day}⋅All day`
+      : `${day}⋅${timeRange(item.startsAt, item.endsAt, timezone)}`;
+  }
 
   if (item.isAllDay) {
-    const endDay = previousAllDayDate(
-      item.endsAt,
-      item.timezone
-    );
-
-    return start.slice(0, 10) === endDay
-      ? `${endDay} · All day`
-      : `${start.slice(0, 10)} → ${endDay} · All day`;
+    const inclusiveEnd = new Date(`${endDay}T00:00:00Z`).toISOString();
+    return `${dayLabel(item.startsAt, timezone, "short")} – ${dayLabel(inclusiveEnd, timezone, "short")}⋅All day`;
   }
 
-  const end = formatCalendarLocal(
-    item.endsAt,
-    item.timezone
-  );
-
-  if (
-    start.slice(0, 10) ===
-    end.slice(0, 10)
-  ) {
-    return (
-      `${start.slice(0, 10)} · ` +
-      `${start.slice(11)}–${end.slice(11)}`
-    );
-  }
-
-  return (
-    `${start.replace("T", " ")} → ` +
-    `${end.replace("T", " ")}`
-  );
+  const start = clock12(item.startsAt, timezone);
+  const end = clock12(item.endsAt, timezone);
+  return `${dayLabel(item.startsAt, timezone, "short")}⋅${start.time}${start.meridiem} – ${dayLabel(item.endsAt, timezone, "short")}⋅${end.time}${end.meridiem}`;
 }
 
 const PREVIEW_KIND_LABEL: { [K in NonNullable<CalendarEventView["kind"]>]?: string } = {
@@ -740,11 +760,11 @@ export function EventManager({
         >
           <div className="space-y-5">
             <Row icon={Clock3}>
-              <p className="text-sm">{eventSchedule(preview)}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {preview.timezone}
-                {preview.recurrenceRule ? ` · ${repeatLabel(preview.recurrenceRule) ?? ""}` : ""}
-              </p>
+              <p className="text-sm font-medium">{eventSchedule(preview)}</p>
+              {preview.recurrenceRule && (
+                <p className="mt-1 text-sm text-muted-foreground">{repeatLabel(preview.recurrenceRule)}</p>
+              )}
+              <p className="mt-1 text-xs text-muted-foreground">{preview.timezone}</p>
             </Row>
 
             {preview.location && (
