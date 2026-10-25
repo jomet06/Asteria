@@ -6,7 +6,6 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import {
   Bell,
-  Bot,
   CalendarDays,
   LayoutDashboard,
   ListTodo,
@@ -16,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { signOut } from "@/app/auth/actions";
+import { HermesFab } from "@/components/hermes-fab";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
@@ -27,13 +27,13 @@ type AppSidebarProps = {
   workspace: boolean;
   displayName: string;
   email: string;
+  hermesReady: boolean;
 };
 
 const navigation = [
   { id: "dashboard", href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "tasks", href: "/tasks", label: "To-Do List", icon: ListTodo },
   { id: "calendar", href: "/calendar", label: "Calendar", icon: CalendarDays },
-  { id: "hermes", href: "/hermes", label: "Hermes AI", icon: Bot },
   { id: "settings", href: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
@@ -73,6 +73,7 @@ export function AppSidebar({
   workspace,
   displayName,
   email,
+  hermesReady,
 }: AppSidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [desktopHoverOpen, setDesktopHoverOpen] = useState(false);
@@ -273,6 +274,9 @@ export function AppSidebar({
           </footer>
         )}
       </div>
+
+      {/* Hermes lives as a floating launcher, not a sidebar item. */}
+      <HermesFab configured={hermesReady} visible={activePage !== "hermes"} />
     </div>
   );
 }

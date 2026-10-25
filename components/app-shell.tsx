@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { getMyAccount } from "@/features/profile/data";
+import { hermesConfigured } from "@/features/hermes/config";
 
 type AppShellProps = {
   children: ReactNode;
@@ -27,6 +28,7 @@ export async function AppShell({
       workspace={workspace}
       displayName={displayName}
       email={user.email ?? ""}
+      hermesReady={hermesConfigured()}
     >
       {children}
     </AppSidebar>

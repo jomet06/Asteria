@@ -9,6 +9,8 @@ import vm from "node:vm";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const nativeRequire = createRequire(import.meta.url);
@@ -21,7 +23,7 @@ function createLoader() {
     const entry = { exports: {} };
     cache.set(file, entry);
     const compiled = ts.transpileModule(readFileSync(file, "utf8"), {
-      compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS, esModuleInterop: true },
+      compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS, esModuleInterop: true, jsx: ts.JsxEmit.ReactJSX },
     }).outputText;
     function require(name) {
       if (Object.hasOwn(mocks, name)) return mocks[name];
@@ -384,8 +386,7 @@ test("daily planning refuses to run unconfigured, on bad dates, or without open 
   assert.equal((await generateMyDailyPlan("2026-10-26")).error, "no_open_tasks");
 });
 
-test("chat action validates messages and maps gemini failures", async () => {
-  const { prisma } = fakePrisma({ openTasks: [] });
+test("chat action validates messages and maps gemini failures", async () => {  const { prisma } = fakePrisma({ openTasks: [] });
   const load = createLoader();
   const chat = load(path.join(root, "features/hermes/actions.ts"), buildMocks({ prisma }));
 
@@ -422,4 +423,26 @@ test("chat action validates messages and maps gemini failures", async () => {
   } finally {
     globalThis.fetch = previousFetch;
   }
+});
+
+test("hermes floating launcher renders closed and honors visibility", () => {
+  const load = createLoader();
+  const mocks = buildMocks({ prisma: fakePrisma().prisma });
+  const fabMocks = {
+    ...mocks,
+    "@/features/hermes/actions": {
+      sendHermesMessage: async () => ({ ok: true, reply: "", tools: [] }),
+      generateDailyPlanAction: async () => ({ ok: false, error: "not_configured" }),
+    },
+  };
+  const { HermesFab } = load(path.join(root, "components/hermes-fab.tsx"), fabMocks);
+
+  const markup = renderToStaticMarkup(React.createElement(HermesFab, { configured: true }));
+  assert.match(markup, /aria-label="Open Hermes chat"/);
+  assert.doesNotMatch(markup, /role="dialog"/, "panel must stay closed during SSR");
+
+  assert.equal(renderToStaticMarkup(React.createElement(HermesFab, { configured: true, visible: false })), "");
+
+  const unconfigured = renderToStaticMarkup(React.createElement(HermesFab, { configured: false }));
+  assert.match(unconfigured, /aria-label="Open Hermes chat"/);
 });
