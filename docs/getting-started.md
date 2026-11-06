@@ -4,7 +4,7 @@ This guide covers a **local Asteria web app** and optional integration setup. It
 
 ## Prerequisites
 
-- Node.js compatible with Next.js 16, with **Node.js 22+ recommended** if you also run the native-WebSocket Discord gateway.
+- Node.js **24**, or **22.12 or later within 22.x**, to satisfy the locked Prisma packages and support the native-WebSocket Discord gateway.
 - npm and a PostgreSQL database in a **Supabase project**, including Supabase Auth and the `auth.users` schema used by Asteria's migrations.
 - A development account and permission to create/alter tables **only in the intended environment**.
 - Optional: Google OAuth client, Gemini API key, and Discord bot credentials.

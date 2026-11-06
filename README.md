@@ -3,17 +3,26 @@
 </p>
 
 <h1 align="center">Asteria</h1>
-<p align="center"><strong>Your AI-powered Personal Operating System.</strong></p>
-<p align="center">Calendar, tasks, daily planning, and notifications in one workspace, with an AI assistant and optional Google Calendar and Discord integrations.</p>
+<p align="center"><strong>Full-stack productivity workspace with a validated AI assistant.</strong></p>
+<p align="center">Built with Next.js, TypeScript, PostgreSQL, Prisma, and Supabase Auth. Asteria brings calendars, tasks, projects, and daily planning into one workspace, with a Gemini-powered assistant and optional Google Calendar and Discord integrations.</p>
 
 <p align="center">
   <a href="#features">Features</a> ·
+  <a href="#engineering-highlights">Engineering highlights</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#architecture">Architecture</a> ·
   <a href="#documentation">Docs</a>
 </p>
 
 > **Project status (October 2026):** Asteria is an evolving MVP, not a declared production-ready service. The notification-system report records that database migration `20261026_notification_system` was applied and verified on October 25, 2026. **Live scheduler activation and end-to-end Discord delivery are not yet confirmed.** See [notification rollout notes](docs/notification-system.md). The recorded local test results do not replace deployment verification.
+
+## Engineering highlights
+
+- **Owner-scoped backend:** authenticated server sessions determine resource ownership. [Task actions](features/tasks/actions.ts) validate inputs, project ownership, and dependencies before writing through Prisma; database access stays on the server.
+- **Validated AI actions:** [Hermes tools](features/hermes/tools.ts) call application operations for task/event creation, task completion, and free-time lookup. Gemini does not write directly to the database or bypass application business rules.
+- **Explicit integration boundaries:** Google Calendar imports are manual, read-only mirrors; outbound writes target a dedicated Asteria calendar and remain best-effort. Refresh tokens are encrypted at rest. Notification generation and Discord delivery use separate workers and persisted delivery state.
+
+For the entity model, authorization boundaries, and integration flows, see [Architecture](docs/architecture.md). Offline regression checks are documented under [Checks](#checks); they do not replace deployment acceptance testing.
 
 ## Features
 
@@ -45,7 +54,7 @@
 
 ## Quick start
 
-Use a compatible Node.js installation (Node.js **22+ recommended** for the separate Discord runner's native `WebSocket`) and npm.
+Use Node.js **24**, or **22.12 or later within 22.x**, and npm. These versions meet the locked Prisma packages' Node.js requirements and support the separate Discord runner's native `WebSocket`.
 
 ```bash
 git clone https://github.com/jomet06/Asteria.git
